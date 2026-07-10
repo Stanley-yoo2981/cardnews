@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(./**)",
+      "Write(./drafts/**)",
+      "Edit(./drafts/**)",
+      "Glob",
+      "Grep",
+      "WebFetch(domain:www.yeoon.co.kr)",
+      "Bash(node scripts/compliance.mjs *)",
+      "Bash(node scripts/render.mjs *)"
+    ],
+    "deny": [
+      "Bash(curl *)",
+      "Bash(wget *)",
+      "Bash(git push *)",
+      "Bash(gh *)",
+      "Bash(rm *)",
+      "Edit(./template.html)",
+      "Edit(./CLAUDE.md)",
+      "Edit(./calendar.json)",
+      "Edit(./assets/**)",
+      "WebFetch(domain:graph.instagram.com)",
+      "WebFetch(domain:graph.facebook.com)"
+    ]
+  }
+}
