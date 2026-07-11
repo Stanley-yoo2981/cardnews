@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>법무법인 여온 · 카드뉴스 검수</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+<style>
+:root{
+  --navy:#0F1E35; --navy2:#16304F; --ink:#0A101C;
+  --gold:#C8A560; --gold2:#E3CE9B; --paper:#F6F3ED;
+  --line:rgba(200,165,96,.32); --mute:rgba(246,243,237,.62);
+  --ok:#5FBE7E; --no:#E88B7A;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:'Pretendard','Apple SD Gothic Neo','Noto Sans KR',system-ui,sans-serif;
+  background:#0b1220;color:var(--paper);line-height:1.55;-webkit-font-smoothing:antialiased;
+  padding:0 14px calc(28px + env(safe-area-inset-bottom));}
+.wrap{max-width:960px;margin:0 auto}
+header{display:flex;align-items:center;gap:10px;padding:20px 4px 14px}
+header .dot{width:10px;height:10px;border-radius:50%;background:var(--gold)}
+header h1{font-size:18px;font-weight:800;letter-spacing:-.02em}
+header .sub{color:var(--mute);font-size:12px;margin-left:auto;text-align:right}
+.seg{display:flex;gap:6px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);
+  border-radius:12px;padding:5px;margin:6px 0 16px}
+.seg button{flex:1;border:0;background:transparent;color:var(--mute);font-family:inherit;font-weight:800;
+  font-size:15px;padding:11px;border-radius:9px;cursor:pointer}
+.seg button.on{background:rgba(200,165,96,.16);color:var(--gold2)}
+.card{background:linear-gradient(180deg,var(--navy),var(--ink));border:1px solid var(--line);
+  border-radius:16px;padding:20px;margin-bottom:14px}
+h2{font-size:14px;color:var(--gold2);letter-spacing:.02em;margin-bottom:12px;font-weight:800}
+button{font-family:inherit;cursor:pointer;border:0;border-radius:12px;font-weight:800}
+.btn-primary{background:var(--gold);color:var(--ink);font-size:16px;padding:15px 22px;width:100%}
+.btn-primary:disabled{opacity:.5}
+.btn-ghost{background:transparent;color:var(--gold2);border:1px solid var(--line);font-size:14px;padding:11px 16px}
+.hidden{display:none!important}
+
+/* 검수함 목록 */
+.dlist{display:flex;flex-direction:column;gap:10px}
+.ditem{display:flex;align-items:center;gap:12px;background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:12px;cursor:pointer}
+.ditem .thumb{flex:none;width:56px;height:70px;border-radius:8px;object-fit:cover;background:var(--navy);border:1px solid rgba(255,255,255,.08)}
+.ditem .info{flex:1;min-width:0}
+.ditem .info b{font-size:15px;font-weight:800;display:block}
+.ditem .info small{color:var(--mute);font-size:12.5px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.badge{flex:none;font-size:12px;font-weight:800;padding:5px 11px;border-radius:999px}
+.badge.pending{background:rgba(200,165,96,.16);color:var(--gold2)}
+.badge.approved{background:rgba(95,190,126,.16);color:var(--ok)}
+.badge.rejected{background:rgba(232,139,122,.16);color:var(--no)}
+.empty{color:var(--mute);font-size:14px;text-align:center;padding:26px 0}
+
+/* 뷰어 오버레이 */
+.viewer{position:fixed;inset:0;z-index:50;background:#070b13;display:flex;flex-direction:column}
+.vhead{display:flex;align-items:center;gap:12px;padding:calc(12px + env(safe-area-inset-top)) 14px 12px}
+.vhead .x{font-size:22px;background:none;border:0;color:var(--paper);width:40px;height:40px;border-radius:10px}
+.vhead .t{flex:1;font-size:15px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cards{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;flex:1;-webkit-overflow-scrolling:touch}
+.cards img{flex:0 0 100%;scroll-snap-align:center;width:100%;height:100%;object-fit:contain}
+.counter{position:absolute;top:calc(16px + env(safe-area-inset-top));right:16px;background:rgba(7,11,19,.7);
+  color:var(--gold2);font-size:13px;font-weight:800;padding:5px 12px;border-radius:999px}
+.vinfo{max-height:34vh;overflow:auto;padding:10px 16px;border-top:1px solid rgba(255,255,255,.08);background:#0b1220}
+.vinfo details{margin-bottom:8px}
+.vinfo summary{color:var(--gold2);font-size:13.5px;font-weight:800;cursor:pointer;padding:6px 0}
+.vinfo pre{white-space:pre-wrap;word-break:break-word;font-family:inherit;font-size:12.5px;line-height:1.55;
+  background:rgba(10,16,28,.6);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:11px;color:var(--paper)}
+.vbar{padding:12px 14px calc(14px + env(safe-area-inset-bottom));background:#0b1220;border-top:1px solid rgba(255,255,255,.08)}
+.vbar input{width:100%;background:rgba(10,16,28,.6);border:1px solid rgba(255,255,255,.14);border-radius:10px;
+  color:var(--paper);font-family:inherit;font-size:15px;padding:12px;margin-bottom:9px}
+.vactions{display:flex;gap:10px}
+.vactions button{flex:1;padding:15px;font-size:16px}
+.b-reject{background:rgba(232,139,122,.15);color:var(--no);border:1px solid rgba(232,139,122,.4)}
+.b-approve{background:var(--ok);color:#06210f}
+.vmeta{color:var(--mute);font-size:12.5px;margin-bottom:9px}
+.banner{background:rgba(255,180,162,.08);border:1px solid rgba(255,180,162,.28);color:#ffd7cc;
+  border-radius:10px;padding:10px 13px;font-size:12.5px;margin:2px 0 10px}
+
+/* 생성 탭 */
+.next{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline;margin-bottom:14px}
+.next .big{font-size:26px;font-weight:800}
+.pill{display:inline-block;font-size:12px;color:var(--ink);background:var(--gold2);border-radius:999px;padding:3px 11px;font-weight:800}
+.remain{color:var(--mute);font-size:13px;margin-top:4px}
+.notice{background:rgba(200,165,96,.10);border:1px solid var(--line);border-radius:12px;padding:14px;color:var(--gold2);font-weight:700;font-size:14px}
+.tabs{display:flex;gap:8px;margin-bottom:12px}
+.tab{flex:1;text-align:center;padding:9px;border-radius:9px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--mute);font-weight:800;font-size:13.5px}
+.tab.on{background:rgba(200,165,96,.14);border-color:var(--line);color:var(--gold2)}
+input[type=url],input[type=password],textarea{width:100%;background:rgba(10,16,28,.6);border:1px solid rgba(255,255,255,.12);
+  border-radius:11px;color:var(--paper);font-family:inherit;font-size:15px;padding:12px;margin-bottom:10px}
+textarea{min-height:150px;resize:vertical;line-height:1.6}
+.hint{color:var(--mute);font-size:12px;margin:-4px 0 10px}
+.status-line{margin-top:12px;font-size:13.5px;min-height:18px}
+.status-line.err{color:#ffb4a2}.status-line.ok{color:var(--gold2)}
+.spinner{display:inline-block;width:15px;height:15px;border:2px solid rgba(200,165,96,.35);border-top-color:var(--gold2);
+  border-radius:50%;animation:spin 1s linear infinite;vertical-align:-2px;margin-right:7px}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="dot"></div>
+    <h1>여온 카드뉴스 검수</h1>
+    <div class="sub">이동 중 폰으로 검수 →<br>승인 후 사람이 발행</div>
+  </header>
+
+  <div class="seg">
+    <button id="segReview" class="on">검수함</button>
+    <button id="segGen">생성</button>
+  </div>
+
+  <!-- 검수함 -->
+  <section id="viewReview">
+    <div class="card">
+      <h2>검수 대기 · 승인 · 반려</h2>
+      <div id="dlist" class="dlist"><div class="empty"><span class="spinner"></span>불러오는 중…</div></div>
+    </div>
+  </section>
+
+  <!-- 생성 -->
+  <section id="viewGen" class="hidden">
+    <div class="card" id="queueCard">
+      <h2>다음 회차</h2>
+      <div id="queueBody"><span class="spinner"></span>상태 확인 중…</div>
+      <button class="btn-primary" id="genQueue" style="margin-top:14px" disabled>이번 회차 생성</button>
+      <div class="status-line" id="queueStatus"></div>
+    </div>
+    <div class="card">
+      <h2>새 URL 또는 원고로 생성</h2>
+      <div class="tabs">
+        <div class="tab on" data-tab="url">URL 첨부</div>
+        <div class="tab" data-tab="ms">원고 붙여넣기</div>
+      </div>
+      <div id="pane-url">
+        <input type="url" id="urlInput" placeholder="https://www.yeoon.co.kr/success-story/…" />
+        <div class="hint">한번 사용한 주소는 다시 쓸 수 없습니다.</div>
+        <button class="btn-primary" id="genUrl">URL로 생성</button>
+      </div>
+      <div id="pane-ms" class="hidden">
+        <textarea id="msInput" placeholder="성공사례 원문 전체를 붙여넣으세요. 상단에 '… OOO 변호사가 직접 검토한 …' 문장이 있으면 검토 변호사가 자동 인식됩니다."></textarea>
+        <div class="hint">사이트가 자동 수집을 막을 때(403) 이 방법을 쓰세요.</div>
+        <button class="btn-primary" id="genMs">원고로 생성</button>
+      </div>
+      <input type="password" id="pinInput" placeholder="생성 PIN (설정된 경우에만)" autocomplete="off" />
+      <div class="hint">서버에 GENERATE_PIN 을 설정한 경우에만 입력하세요. 기본은 불필요.</div>
+      <div class="status-line" id="manualStatus"></div>
+    </div>
+  </section>
+</div>
+
+<!-- 뷰어 오버레이 -->
+<div class="viewer hidden" id="viewer">
+  <div class="vhead">
+    <button class="x" id="vClose">✕</button>
+    <div class="t" id="vTitle"></div>
+    <span class="badge" id="vBadge"></span>
+  </div>
+  <div style="position:relative;flex:1;min-height:0;display:flex">
+    <div class="cards" id="vCards"></div>
+    <div class="counter" id="vCounter">1 / 10</div>
+  </div>
+  <div class="vinfo">
+    <div class="banner">이 이미지는 <b>초안</b>입니다. 승인 후 인스타 업로드는 <b>사람이 직접</b> 합니다.</div>
+    <details open><summary>원문 근거 (문구가 원문 어디서 왔는지)</summary><pre id="vReview"></pre></details>
+    <details><summary>인스타 본문 (caption)</summary><pre id="vCaption"></pre></details>
+  </div>
+  <div class="vbar">
+    <div class="vmeta" id="vMeta"></div>
+    <input type="text" id="vReviewer" placeholder="검수자 성함 (기록용)" autocomplete="off" />
+    <input type="text" id="vMemo" placeholder="반려 사유·메모 (선택)" autocomplete="off" />
+    <div class="vactions">
+      <button class="b-reject" id="vReject">반려</button>
+      <button class="b-approve" id="vApprove">승인</button>
+    </div>
+    <div class="status-line" id="vStatus"></div>
+  </div>
+</div>
+
+<script>
+const $ = (s)=>document.querySelector(s);
+const esc = (s)=>String(s==null?"":s).replace(/</g,"&lt;");
+let lastPin = "";
+
+// 탭 전환
+$("#segReview").onclick=()=>{ $("#segReview").classList.add("on");$("#segGen").classList.remove("on");
+  $("#viewReview").classList.remove("hidden");$("#viewGen").classList.add("hidden"); loadDrafts(); };
+$("#segGen").onclick=()=>{ $("#segGen").classList.add("on");$("#segReview").classList.remove("on");
+  $("#viewGen").classList.remove("hidden");$("#viewReview").classList.add("hidden"); loadStatus(); };
+document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
+  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("on"));t.classList.add("on");
+  const k=t.dataset.tab;$("#pane-url").classList.toggle("hidden",k!=="url");$("#pane-ms").classList.toggle("hidden",k!=="ms");
+});
+
+const STATUS_KR={pending:"검수 대기",approved:"승인",rejected:"반려"};
+
+// ---- 검수함 ----
+async function loadDrafts(){
+  try{
+    const r=await fetch("/api/drafts");const s=await r.json();
+    const box=$("#dlist");
+    if(!s.ok) throw new Error(s.error);
+    if(!s.drafts.length){ box.innerHTML='<div class="empty">아직 생성된 초안이 없습니다.<br>"생성" 탭에서 만들어 보세요.</div>'; return; }
+    box.innerHTML="";
+    s.drafts.forEach(d=>{
+      const el=document.createElement("div");el.className="ditem";
+      const when=d.at?new Date(d.at).toLocaleDateString("ko-KR",{month:"numeric",day:"numeric"}):"";
+      el.innerHTML=
+        '<img class="thumb" loading="lazy" src="/'+d.cards[0]+'">'+
+        '<div class="info"><b>'+esc(d.id)+' · '+(d.lawyer?esc(d.lawyer)+" 변호사":"")+'</b>'+
+        '<small>'+when+' · '+esc(d.url||d.title||"")+'</small></div>'+
+        '<span class="badge '+d.status+'">'+STATUS_KR[d.status]+'</span>';
+      el.onclick=()=>openViewer(d.dir);
+      box.appendChild(el);
+    });
+  }catch(e){ $("#dlist").innerHTML='<div class="empty" style="color:#ffb4a2">불러오기 실패: '+esc(e.message)+'</div>'; }
+}
+
+// ---- 뷰어 ----
+let curDir=null;
+async function openViewer(dir){
+  curDir=dir;
+  const r=await fetch("/api/draft?dir="+encodeURIComponent(dir));const d=await r.json();
+  if(!d.ok){ alert("초안을 불러오지 못했습니다: "+d.error); return; }
+  $("#vTitle").textContent=d.id+" · "+(d.lawyer?d.lawyer+" 변호사":"");
+  const badge=$("#vBadge");badge.className="badge "+d.status;badge.textContent=STATUS_KR[d.status];
+  const cards=$("#vCards");cards.innerHTML="";
+  d.cards.forEach((c,i)=>{const im=new Image();im.src="/"+c;im.alt="card "+(i+1);cards.appendChild(im);});
+  cards.scrollLeft=0;$("#vCounter").textContent="1 / 10";
+  $("#vReview").textContent=d.review||"(원문 근거 없음)";
+  $("#vCaption").textContent=d.caption||"";
+  $("#vReviewer").value=d.reviewer||"";$("#vMemo").value=d.memo||"";
+  let meta=d.reviewedAt?("최근 검수: "+(d.reviewer||"")+" · "+new Date(d.reviewedAt).toLocaleString("ko-KR")):"아직 검수 전";
+  if(d.driveUrl) meta+=' · <a href="'+d.driveUrl+'" target="_blank" style="color:var(--gold2)">☁ 드라이브</a>';
+  else if(d.driveError) meta+=' · <span style="color:#ffb4a2">드라이브 실패</span>';
+  $("#vMeta").innerHTML=meta;
+  $("#vStatus").textContent="";
+  $("#viewer").classList.remove("hidden");document.body.style.overflow="hidden";
+}
+$("#vClose").onclick=()=>{ $("#viewer").classList.add("hidden");document.body.style.overflow="";loadDrafts(); };
+$("#vCards").onscroll=(e)=>{const el=e.target;const i=Math.round(el.scrollLeft/el.clientWidth)+1;$("#vCounter").textContent=Math.min(10,Math.max(1,i))+" / 10";};
+
+async function review(status){
+  const payload={dir:curDir,status,reviewer:$("#vReviewer").value.trim(),memo:$("#vMemo").value.trim()};
+  $("#vStatus").textContent="저장 중…";
+  try{
+    const r=await fetch("/api/review",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+    const d=await r.json();
+    if(!d.ok) throw new Error(d.error);
+    const badge=$("#vBadge");badge.className="badge "+d.status;badge.textContent=STATUS_KR[d.status];
+    let msg=STATUS_KR[d.status]+' 처리됨. 닫으면 목록에 반영됩니다.';
+    if(d.drive&&d.drive.url) msg+=' <a href="'+d.drive.url+'" target="_blank" style="color:var(--gold2)">☁ 드라이브 저장됨</a>';
+    else if(d.drive&&d.drive.error) msg+=' <span style="color:#ffb4a2">(드라이브 저장 실패: '+esc(d.drive.error)+')</span>';
+    $("#vStatus").innerHTML='<span style="color:var(--gold2)">'+msg+'</span>';
+  }catch(e){ $("#vStatus").innerHTML='<span style="color:#ffb4a2">실패: '+esc(e.message)+'</span>'; }
+}
+$("#vApprove").onclick=()=>review("approved");
+$("#vReject").onclick=()=>review("rejected");
+
+// ---- 생성 ----
+async function loadStatus(){
+  try{
+    const r=await fetch("/api/status");const s=await r.json();if(!s.ok)throw new Error(s.error);
+    const body=$("#queueBody"),btn=$("#genQueue");
+    if(s.exhausted){ body.innerHTML='<div class="notice">'+esc(s.message)+'</div><div class="remain">아래에서 새 URL/원고로 생성하세요.</div>';btn.classList.add("hidden"); }
+    else{ const n=s.next;
+      body.innerHTML='<div class="next"><span class="pill">#'+n.id+'</span><span class="big">'+n.date+'</span></div>'+
+        '<a href="'+n.url+'" target="_blank" style="color:var(--gold2);font-size:13px;word-break:break-all">'+esc(n.url)+'</a>'+
+        '<div class="remain">남은 예약 '+s.remaining+' / '+s.total+'건</div>';
+      btn.classList.remove("hidden");btn.disabled=false; }
+  }catch(e){ $("#queueBody").innerHTML='<span style="color:#ffb4a2">상태 확인 실패: '+esc(e.message)+'</span>'; }
+}
+async function generate(payload,statusEl,btns){
+  payload.pin=$("#pinInput").value.trim();
+  btns.forEach(b=>b.disabled=true);
+  statusEl.className="status-line";statusEl.innerHTML='<span class="spinner"></span>생성 중… 요약·검수·렌더까지 30초~1분 걸릴 수 있습니다.';
+  try{
+    const r=await fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+    const d=await r.json();
+    if(!d.ok){ statusEl.className="status-line err";statusEl.innerHTML="실패: "+esc(d.error).replace(/\n/g,"<br>"); }
+    else{ statusEl.className="status-line ok";statusEl.innerHTML="완료. 검수함에서 확인하세요.";
+      $("#segReview").click(); }
+  }catch(e){ statusEl.className="status-line err";statusEl.textContent="오류: "+e.message; }
+  finally{ btns.forEach(b=>b.disabled=false); }
+}
+$("#genQueue").onclick=()=>generate({type:"queue"},$("#queueStatus"),[$("#genQueue")]);
+$("#genUrl").onclick=()=>{const url=$("#urlInput").value.trim();if(!url){$("#manualStatus").className="status-line err";$("#manualStatus").textContent="URL을 입력하세요.";return;}generate({type:"url",url},$("#manualStatus"),[$("#genUrl"),$("#genMs")]);};
+$("#genMs").onclick=()=>{const m=$("#msInput").value.trim();if(m.length<120){$("#manualStatus").className="status-line err";$("#manualStatus").textContent="원고가 너무 짧습니다. 본문 전체를 붙여넣으세요.";return;}generate({type:"manuscript",manuscript:m},$("#manualStatus"),[$("#genUrl"),$("#genMs")]);};
+
+loadDrafts();
+</script>
+</body>
+</html>

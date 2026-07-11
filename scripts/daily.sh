@@ -3,7 +3,9 @@
 # 클로드 코드는 "초안 생성"까지만 한다. 게시는 사람이 한다.
 set -euo pipefail
 
-PROJECT="/srv/yeoon-cardnews"
+# PROJECT는 스크립트 위치 기준으로 자동 계산한다(서버든 CI든 동일하게 동작).
+# 필요하면 PROJECT 환경변수로 덮어쓸 수 있다. (예: 서버 설치 경로 PROJECT=/srv/yeoon-cardnews)
+PROJECT="${PROJECT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 LOG="$PROJECT/logs/$(date +%F).log"
 mkdir -p "$PROJECT/logs"
 

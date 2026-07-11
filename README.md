@@ -3,6 +3,68 @@
 매일 오전 9시(KST), 성공사례 1건 → 카드뉴스 10장 **초안** 자동 생성.
 **발행은 자동화하지 않습니다.** 사람이 승인합니다. 이유는 아래 "왜 완전 자동이 아닌가"를 보세요.
 
+두 가지 방식이 있습니다.
+- **웹 생성기** — 폰/PC에서 사이트에 접속해 **"생성" 버튼**을 눌러 초안 1건을 만든다. (아래 "0. 웹 생성기")
+- **매일 자동** — cron/GitHub Actions가 09:00 KST에 자동으로 1건을 만든다. (아래 4번)
+
+---
+
+## 0. 웹 생성기 (버튼으로 생성)
+
+어떤 기기든 브라우저로 접속해 버튼 한 번으로 초안을 만듭니다. **발행은 하지 않습니다** — 만들어진 PNG는 검수용이고, 인스타 업로드는 사람이 합니다.
+
+```bash
+npm install
+export ANTHROPIC_API_KEY=sk-ant-...     # 필수: console.anthropic.com 에서 발급
+npm start                               # http://<서버IP>:3000
+```
+
+- **이번 회차 생성**: `calendar.json` 큐에서 아직 안 쓴 가장 이른 URL을 자동으로 가져와 생성.
+- **한번 쓴 URL/원고는 다시 못 씀**: 사용 이력을 `state/used.json`에 기록해 중복을 막습니다.
+- **18개를 모두 쓰면**: "새로운 URL 또는 원고를 첨부하세요" 안내가 뜨고, **새 URL 입력** 또는 **원고 붙여넣기** 칸으로 생성할 수 있습니다. (사이트가 자동 수집을 차단(403)하면 원고 붙여넣기를 쓰세요.)
+- 생성 흐름: 원문 수집 → `claude-opus-4-8` 로 문안 요약 → `template.html` 디자인으로 조립 → **`compliance.mjs` 게이트 통과** → PNG 10장 렌더 → 검수용 `caption.txt` / `review.md`.
+- 컴플라이언스(금칙어·필수요소)를 통과하지 못하면 렌더로 넘어가지 않고 실패로 처리합니다.
+
+> 폰에서 접속하려면 서버가 인터넷에 떠 있어야 합니다(사내 서버, 클라우드 VM 등). 같은 와이파이면 서버 PC의 IP로 접속하면 됩니다.
+
+### 검수(모바일)
+
+- **검수함** 화면에서 초안 목록(대기/승인/반려)을 보고, 초안을 탭하면 폰에서 카드 10장을 넘겨보며 **원문 근거**를 확인합니다.
+- **승인 / 반려** + 검수자 성함·메모를 남깁니다. 로그인은 없습니다(누구나 열람). 비용이 드는 **생성만** `GENERATE_PIN` 환경변수로 잠글 수 있습니다(선택).
+
+### 구글 드라이브 자동 저장
+
+**승인(완성)된** 카드뉴스를 구글 드라이브 `SNS 카드뉴스` 폴더 아래 **`작업날짜(KST)_제목`** 하위 폴더로 자동 업로드합니다(이미지 10장 + `caption.txt` + `review.md`). 미설정 시 저장만 건너뛰고 앱은 정상 동작합니다.
+
+설정(서비스 계정 방식):
+1. Google Cloud 프로젝트 → **Drive API 사용 설정** → **서비스 계정** 생성 → JSON 키 발급.
+2. 내 드라이브에 상위 폴더를 하나 만들고, 그 폴더를 **서비스 계정 이메일**(`...@....iam.gserviceaccount.com`)과 **편집자**로 공유. 그 폴더의 ID를 복사.
+3. 서버 환경변수:
+   ```bash
+   export GDRIVE_SA_JSON="$(cat service-account.json)"   # 또는 GOOGLE_APPLICATION_CREDENTIALS=키파일경로
+   export GDRIVE_PARENT_ID="<공유한 상위 폴더 ID>"          # 없으면 서비스계정 드라이브 루트에 생성됨
+   ```
+   승인 시 자동 업로드되고, 검수 화면에 **☁ 드라이브** 링크가 표시됩니다.
+
+> 서비스 계정의 "내 드라이브"는 사람 눈에 안 보입니다. 반드시 **내가 만든 폴더를 공유**하고 `GDRIVE_PARENT_ID`로 지정하거나 **공유 드라이브**를 쓰세요.
+
+### AI 배경 이미지 (선택)
+
+각 슬라이드의 **내용(주제)에 맞는 AI 배경 이미지**를 생성해 카드 배경으로 깝니다(블러·어둡게 처리되어 텍스트 가독성 유지). 미설정 시 기존 CSS 추상 배경으로 나옵니다.
+
+- **심의 가드**: 사건을 사실적으로 재현하지 않습니다. 인물·얼굴·글자·법정·폭력 묘사를 프롬프트에서 금지하고, 오직 네이비·골드 톤의 추상적 색·빛·질감만 생성합니다. **10장의 변호사 사진은 항상 진짜 실사진**입니다(AI 아님).
+- **제공자**: Anthropic은 이미지 생성을 제공하지 않아 외부 제공자가 필요합니다. 기본은 OpenAI 이미지(`gpt-image-1`).
+- **설정**:
+  ```bash
+  export CARDNEWS_IMAGES=on
+  export OPENAI_API_KEY=sk-...        # platform.openai.com 발급
+  export IMAGE_QUALITY=low            # low/medium/high (배경은 흐려지므로 low 로 비용 절감)
+  export IMAGE_COUNT=10               # 10=슬라이드마다 개별, 낮추면 소수만 만들어 순환(비용↓)
+  # export IMAGE_MODEL=dall-e-3       # gpt-image-1 이 조직 인증을 요구해 막히면 이걸로
+  ```
+- ⚠️ **gpt-image-1 은 OpenAI 조직 인증(verification)이 되어 있어야** 사용 가능합니다. 인증 전이라 403 이 나면 `IMAGE_MODEL=dall-e-3` 으로 바꾸면 인증 없이 됩니다(세로 규격·품질 파라미터는 코드가 자동 처리).
+- **비용 주의**: 이미지 생성은 장당 과금됩니다. `IMAGE_COUNT`로 개수를 줄이거나 `IMAGE_QUALITY=low`로 조절하세요.
+
 ```
 yeoon-cardnews/
 ├── CLAUDE.md                  ← 컴플라이언스 헌법. 클로드 코드가 매 실행마다 읽는다.
@@ -70,31 +132,25 @@ PATH=/usr/local/bin:/usr/bin:/bin
 `CRON_TZ` 를 지원하지 않는 cron이라면 서버 타임존을 UTC로 두고 `0 0 * * *` 를 쓰세요
 (09:00 KST = 00:00 UTC).
 
-### GitHub Actions — 서버가 없을 때
+### GitHub Actions — 서버가 없을 때 (기본 제공)
 
-```yaml
-name: yeoon-cardnews
-on:
-  schedule:
-    - cron: "0 0 * * *"      # UTC. = 09:00 Asia/Seoul
-  workflow_dispatch:
-jobs:
-  draft:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20 }
-      - run: npm i -g @anthropic-ai/claude-code && npm i puppeteer
-      - run: ./scripts/daily.sh
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-      - uses: actions/upload-artifact@v4
-        with: { name: cardnews-draft, path: drafts/ }
-```
+이 워크플로우는 이미 **`.github/workflows/cardnews.yml`** 에 들어 있습니다. 별도로 붙일 필요가 없습니다.
+매일 `00:00 UTC = 09:00 Asia/Seoul` 에 초안 1건을 만들어 `cardnews-draft` 아티팩트로 올립니다.
+Actions 탭에서 `Run workflow` 로 수동 실행도 됩니다.
 
-GitHub Actions의 `schedule` 은 **항상 UTC**입니다. 여기서 `0 9 * * *` 라고 쓰면 오후 6시에 돕니다.
+켜기 전에 저장소 시크릿 두 개만 넣으세요
+(`Settings → Secrets and variables → Actions → New repository secret`):
+
+| 시크릿 | 필수 | 용도 |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | 필수 | 클로드 코드 헤드리스 실행 |
+| `SLACK_WEBHOOK` | 선택 | 검수 요청 알림. 없으면 로그에만 남습니다. |
+
+GitHub Actions의 `schedule` 은 **항상 UTC**입니다. `0 9 * * *` 라고 쓰면 오후 6시(KST)에 돌기 때문에
+워크플로우에는 `0 0 * * *` 로 고정해 두었습니다.
+
+> 아티팩트는 발행이 아닙니다. `card_01~10.png` 와 `review.md` 는 검수용이며,
+> 인스타 업로드와 `calendar.json` 갱신은 여전히 사람이 합니다. ("왜 완전 자동이 아닌가" 참고)
 
 ### 클로드 코드 자체 스케줄링은?
 

@@ -1,0 +1,23 @@
+{
+  "name": "yeoon-cardnews",
+  "version": "1.0.0",
+  "private": true,
+  "description": "법무법인 여온 카드뉴스 자동화 — 매일 09:00 KST 성공사례 1건을 카드뉴스 10장 초안으로 생성한다. 발행은 사람이 한다.",
+  "type": "module",
+  "scripts": {
+    "start": "node server/server.mjs",
+    "draft": "./scripts/daily.sh",
+    "compliance": "node scripts/compliance.mjs",
+    "render": "node scripts/render.mjs",
+    "verify": "node scripts/compliance.mjs template.html"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.68.0",
+    "express": "^5.1.0",
+    "googleapis": "^173.0.0",
+    "puppeteer": "^25.3.0"
+  }
+}
