@@ -51,19 +51,36 @@ button{font-family:inherit;cursor:pointer;border:0;border-radius:12px;font-weigh
 
 /* 뷰어 오버레이 */
 .viewer{position:fixed;inset:0;z-index:50;background:#070b13;display:flex;flex-direction:column}
-.vhead{display:flex;align-items:center;gap:12px;padding:calc(12px + env(safe-area-inset-top)) 14px 12px}
+.vhead{display:flex;align-items:center;gap:10px;padding:calc(12px + env(safe-area-inset-top)) 14px 12px}
 .vhead .x{font-size:22px;background:none;border:0;color:var(--paper);width:40px;height:40px;border-radius:10px}
-.vhead .t{flex:1;font-size:15px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cards{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;flex:1;-webkit-overflow-scrolling:touch}
+.vhead .t{flex:1;font-size:15px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.vhead .ebtn{background:rgba(200,165,96,.16);color:var(--gold2);border:1px solid var(--line);font-size:14px;padding:9px 15px}
+
+/* 이미지 스테이지(크게) + 좌우 화살표 */
+.stage{position:relative;flex:1;min-height:0;display:flex;background:#05080e}
+.cards{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;flex:1;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.cards::-webkit-scrollbar{display:none}
 .cards img{flex:0 0 100%;scroll-snap-align:center;width:100%;height:100%;object-fit:contain}
-.counter{position:absolute;top:calc(16px + env(safe-area-inset-top));right:16px;background:rgba(7,11,19,.7);
+.counter{position:absolute;top:14px;right:16px;background:rgba(7,11,19,.7);
   color:var(--gold2);font-size:13px;font-weight:800;padding:5px 12px;border-radius:999px}
-.vinfo{max-height:34vh;overflow:auto;padding:10px 16px;border-top:1px solid rgba(255,255,255,.08);background:#0b1220}
-.vinfo details{margin-bottom:8px}
+.nav{position:absolute;top:50%;transform:translateY(-50%);z-index:3;width:46px;height:46px;border-radius:50%;
+  background:rgba(10,16,28,.62);color:var(--paper);border:1px solid rgba(255,255,255,.16);
+  font-size:26px;line-height:1;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.nav:active{background:rgba(200,165,96,.35)}
+.nav.prev{left:12px}.nav.next{right:12px}
+
+/* 드래그 구분선(이미지 ↔ 정보 영역 크기 조절) */
+.vdivider{height:16px;background:#0b1220;border-top:1px solid rgba(255,255,255,.08);
+  display:flex;align-items:center;justify-content:center;cursor:row-resize;touch-action:none;flex:none}
+.vdivider::before{content:"";width:46px;height:4px;border-radius:3px;background:rgba(200,165,96,.5)}
+
+.vinfo{height:200px;overflow:auto;padding:10px 16px;background:#0b1220;flex:none}
+.vinfo details{margin-bottom:10px}
 .vinfo summary{color:var(--gold2);font-size:13.5px;font-weight:800;cursor:pointer;padding:6px 0}
 .vinfo pre{white-space:pre-wrap;word-break:break-word;font-family:inherit;font-size:12.5px;line-height:1.55;
-  background:rgba(10,16,28,.6);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:11px;color:var(--paper)}
-.vbar{padding:12px 14px calc(14px + env(safe-area-inset-bottom));background:#0b1220;border-top:1px solid rgba(255,255,255,.08)}
+  background:rgba(10,16,28,.6);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:11px;color:var(--paper);
+  resize:vertical;overflow:auto;min-height:70px;height:150px;max-height:60vh}
+.vbar{padding:12px 14px calc(14px + env(safe-area-inset-bottom));background:#0b1220;border-top:1px solid rgba(255,255,255,.08);flex:none}
 .vbar input{width:100%;background:rgba(10,16,28,.6);border:1px solid rgba(255,255,255,.14);border-radius:10px;
   color:var(--paper);font-family:inherit;font-size:15px;padding:12px;margin-bottom:9px}
 .vactions{display:flex;gap:10px}
@@ -72,7 +89,28 @@ button{font-family:inherit;cursor:pointer;border:0;border-radius:12px;font-weigh
 .b-approve{background:var(--ok);color:#06210f}
 .vmeta{color:var(--mute);font-size:12.5px;margin-bottom:9px}
 .banner{background:rgba(255,180,162,.08);border:1px solid rgba(255,180,162,.28);color:#ffd7cc;
-  border-radius:10px;padding:10px 13px;font-size:12.5px;margin:2px 0 10px}
+  border-radius:10px;padding:9px 12px;font-size:12px;margin:2px 0 10px}
+
+/* 편집 오버레이 */
+.editor{position:fixed;inset:0;z-index:60;background:#0b1220;display:flex;flex-direction:column}
+.ehead{display:flex;align-items:center;gap:10px;padding:calc(12px + env(safe-area-inset-top)) 14px 12px;border-bottom:1px solid rgba(255,255,255,.08)}
+.ehead .x{font-size:22px;background:none;border:0;color:var(--paper);width:40px;height:40px;border-radius:10px}
+.ehead .t{flex:1;font-size:16px;font-weight:800}
+.ehead .esave{background:var(--gold);color:var(--ink);font-size:14px;padding:11px 16px}
+.ehead .esave:disabled{opacity:.55}
+.ebody{flex:1;overflow:auto;padding:14px 16px calc(20px + env(safe-area-inset-bottom))}
+.esec{margin-bottom:18px}
+.esec h3{font-size:13px;color:var(--gold2);font-weight:800;letter-spacing:.02em;margin-bottom:10px;
+  padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.08)}
+.efield{margin-bottom:11px}
+.efield label{display:block;font-size:12px;color:var(--mute);margin-bottom:5px;font-weight:700}
+.efield input,.efield textarea{width:100%;background:rgba(10,16,28,.6);border:1px solid rgba(255,255,255,.14);
+  border-radius:9px;color:var(--paper);font-family:inherit;font-size:14.5px;padding:10px;line-height:1.5}
+.efield textarea{min-height:64px;resize:vertical}
+.erow{display:flex;gap:8px}.erow .efield{flex:1}
+.ehint{color:var(--mute);font-size:12px;margin:2px 0 12px;line-height:1.5}
+.estatus{padding:0 16px calc(12px + env(safe-area-inset-bottom));font-size:13.5px;min-height:20px}
+.estatus.err{color:#ffb4a2}.estatus.ok{color:var(--gold2)}
 
 /* 생성 탭 */
 .next{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline;margin-bottom:14px}
@@ -99,7 +137,7 @@ textarea{min-height:150px;resize:vertical;line-height:1.6}
   <header>
     <div class="dot"></div>
     <h1>여온 카드뉴스 검수</h1>
-    <div class="sub">이동 중 폰으로 검수 →<br>승인 후 사람이 발행</div>
+    <div class="sub">이동 중 폰으로 검수·편집 →<br>승인 후 사람이 발행</div>
   </header>
 
   <div class="seg">
@@ -151,14 +189,18 @@ textarea{min-height:150px;resize:vertical;line-height:1.6}
   <div class="vhead">
     <button class="x" id="vClose">✕</button>
     <div class="t" id="vTitle"></div>
+    <button class="ebtn" id="vEdit">편집</button>
     <span class="badge" id="vBadge"></span>
   </div>
-  <div style="position:relative;flex:1;min-height:0;display:flex">
+  <div class="stage">
     <div class="cards" id="vCards"></div>
+    <button class="nav prev" id="navPrev" aria-label="이전">‹</button>
+    <button class="nav next" id="navNext" aria-label="다음">›</button>
     <div class="counter" id="vCounter">1 / 10</div>
   </div>
-  <div class="vinfo">
-    <div class="banner">이 이미지는 <b>초안</b>입니다. 승인 후 인스타 업로드는 <b>사람이 직접</b> 합니다.</div>
+  <div class="vdivider" id="vDivider" title="드래그해서 이미지/정보 영역 크기 조절"></div>
+  <div class="vinfo" id="vInfo">
+    <div class="banner">이 이미지는 <b>초안</b>입니다. 승인 후 인스타 업로드는 <b>사람이 직접</b> 합니다. 아래 칸은 모서리를 드래그해 크기를 조절할 수 있습니다.</div>
     <details open><summary>원문 근거 (문구가 원문 어디서 왔는지)</summary><pre id="vReview"></pre></details>
     <details><summary>인스타 본문 (caption)</summary><pre id="vCaption"></pre></details>
   </div>
@@ -174,10 +216,20 @@ textarea{min-height:150px;resize:vertical;line-height:1.6}
   </div>
 </div>
 
+<!-- 편집 오버레이 -->
+<div class="editor hidden" id="editor">
+  <div class="ehead">
+    <button class="x" id="eClose">✕</button>
+    <div class="t">카드뉴스 편집</div>
+    <button class="esave" id="eSave">저장 &amp; 다시 렌더</button>
+  </div>
+  <div class="ebody" id="eBody"></div>
+  <div class="estatus" id="eStatus"></div>
+</div>
+
 <script>
 const $ = (s)=>document.querySelector(s);
 const esc = (s)=>String(s==null?"":s).replace(/</g,"&lt;");
-let lastPin = "";
 
 // 탭 전환
 $("#segReview").onclick=()=>{ $("#segReview").classList.add("on");$("#segGen").classList.remove("on");
@@ -215,15 +267,18 @@ async function loadDrafts(){
 
 // ---- 뷰어 ----
 let curDir=null;
+function renderCards(cards,bust){
+  const box=$("#vCards");box.innerHTML="";
+  cards.forEach((c,i)=>{const im=new Image();im.src="/"+c+(bust?("?v="+Date.now()):"");im.alt="card "+(i+1);box.appendChild(im);});
+  box.scrollLeft=0;$("#vCounter").textContent="1 / 10";
+}
 async function openViewer(dir){
   curDir=dir;
   const r=await fetch("/api/draft?dir="+encodeURIComponent(dir));const d=await r.json();
   if(!d.ok){ alert("초안을 불러오지 못했습니다: "+d.error); return; }
   $("#vTitle").textContent=d.id+" · "+(d.lawyer?d.lawyer+" 변호사":"");
-  const badge=$("#vBadge");badge.className="badge "+d.status;badge.textContent=STATUS_KR[d.status];
-  const cards=$("#vCards");cards.innerHTML="";
-  d.cards.forEach((c,i)=>{const im=new Image();im.src="/"+c;im.alt="card "+(i+1);cards.appendChild(im);});
-  cards.scrollLeft=0;$("#vCounter").textContent="1 / 10";
+  setBadge(d.status);
+  renderCards(d.cards,false);
   $("#vReview").textContent=d.review||"(원문 근거 없음)";
   $("#vCaption").textContent=d.caption||"";
   $("#vReviewer").value=d.reviewer||"";$("#vMemo").value=d.memo||"";
@@ -234,8 +289,24 @@ async function openViewer(dir){
   $("#vStatus").textContent="";
   $("#viewer").classList.remove("hidden");document.body.style.overflow="hidden";
 }
+function setBadge(status){const b=$("#vBadge");b.className="badge "+status;b.textContent=STATUS_KR[status];}
 $("#vClose").onclick=()=>{ $("#viewer").classList.add("hidden");document.body.style.overflow="";loadDrafts(); };
 $("#vCards").onscroll=(e)=>{const el=e.target;const i=Math.round(el.scrollLeft/el.clientWidth)+1;$("#vCounter").textContent=Math.min(10,Math.max(1,i))+" / 10";};
+
+// 좌우 화살표
+$("#navPrev").onclick=()=>{const el=$("#vCards");el.scrollBy({left:-el.clientWidth,behavior:"smooth"});};
+$("#navNext").onclick=()=>{const el=$("#vCards");el.scrollBy({left:el.clientWidth,behavior:"smooth"});};
+
+// 이미지 ↔ 정보 영역 드래그 리사이즈
+(function(){
+  const divider=$("#vDivider"),info=$("#vInfo"),bar=$(".vbar");
+  let drag=false;
+  const clamp=(px)=>{const min=90,max=window.innerHeight*0.72;return Math.max(min,Math.min(max,px));};
+  divider.addEventListener("pointerdown",(e)=>{drag=true;divider.setPointerCapture(e.pointerId);e.preventDefault();});
+  divider.addEventListener("pointermove",(e)=>{ if(!drag)return; info.style.height=clamp(window.innerHeight-e.clientY-bar.offsetHeight)+"px"; });
+  divider.addEventListener("pointerup",()=>{drag=false;});
+  divider.addEventListener("pointercancel",()=>{drag=false;});
+})();
 
 async function review(status){
   const payload={dir:curDir,status,reviewer:$("#vReviewer").value.trim(),memo:$("#vMemo").value.trim()};
@@ -244,7 +315,7 @@ async function review(status){
     const r=await fetch("/api/review",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
     const d=await r.json();
     if(!d.ok) throw new Error(d.error);
-    const badge=$("#vBadge");badge.className="badge "+d.status;badge.textContent=STATUS_KR[d.status];
+    setBadge(d.status);
     let msg=STATUS_KR[d.status]+' 처리됨. 닫으면 목록에 반영됩니다.';
     if(d.drive&&d.drive.url) msg+=' <a href="'+d.drive.url+'" target="_blank" style="color:var(--gold2)">☁ 드라이브 저장됨</a>';
     else if(d.drive&&d.drive.error) msg+=' <span style="color:#ffb4a2">(드라이브 저장 실패: '+esc(d.drive.error)+')</span>';
@@ -253,6 +324,107 @@ async function review(status){
 }
 $("#vApprove").onclick=()=>review("approved");
 $("#vReject").onclick=()=>review("rejected");
+
+// ---- 편집기 ----
+// 편집 가능한 필드 스키마(슬라이드별). area=줄바꿈 가능, csv=쉼표로 구분되는 해시태그
+function slideFields(s){return [
+  ["키커(상단 배지)",s+".kicker","text"],["헤드라인",s+".h1","area"],
+  ["강조 단어(금색)",s+".h1_em","text"],["설명",s+".sub","area"],
+];}
+const EDIT_SECTIONS=[
+  ["공통",[["카테고리(상단 배지)","category","text"]]],
+  ["1장 · 표지",[["표지 헤드라인","cover_h1","area"],["강조 단어(금색)","cover_h1_em","text"],["인용문","cover_quote","area"]]],
+  ["2장",slideFields("s2")],
+  ["3장",slideFields("s3")],
+  ["4장",slideFields("s4")],
+  ["5장 · 법리 대비",[
+    ["키커","s5.kicker","text"],["헤드라인","s5.h1","area"],["강조 단어","s5.h1_em","text"],
+    ["막힌 쪽 제목","s5.vs_a_title","text"],["막힌 쪽 설명","s5.vs_a_desc","text"],
+    ["열린 쪽 제목","s5.vs_b_title","text"],["열린 쪽 설명","s5.vs_b_desc","text"]]],
+  ["6장 · 결과",[
+    ["키커","s6.kicker","text"],["헤드라인","s6.h1","area"],["강조 단어","s6.h1_em","text"],["설명","s6.sub","area"],
+    ["결과1 항목","s6.stats.0.label","text"],["결과1 값","s6.stats.0.value","text"],
+    ["결과2 항목","s6.stats.1.label","text"],["결과2 값","s6.stats.1.value","text"],
+    ["결과3 항목","s6.stats.2.label","text"],["결과3 값","s6.stats.2.value","text"]]],
+  ["7장 · 실무 자료",[
+    ["키커","s7.kicker","text"],["헤드라인","s7.h1","area"],
+    ["자료1 제목","s7.cards.0.title","text"],["자료1 설명","s7.cards.0.desc","text"],
+    ["자료2 제목","s7.cards.1.title","text"],["자료2 설명","s7.cards.1.desc","text"],
+    ["자료3 제목","s7.cards.2.title","text"],["자료3 설명","s7.cards.2.desc","text"]]],
+  ["8장",slideFields("s8")],
+  ["9장 · 체크리스트",[
+    ["키커","s9.kicker","text"],["헤드라인","s9.h1","area"],
+    ["체크1","s9.checks.0","text"],["체크2","s9.checks.1","text"],
+    ["체크3","s9.checks.2","text"],["체크4","s9.checks.3","text"]]],
+  ["10장 · 상담(마무리)",[["마무리 헤드라인","cta_h1","area"],["강조 단어","cta_h1_em","text"]]],
+  ["인스타 본문",[["캡션","caption","area"],["해시태그(쉼표로 구분)","hashtags","csv"]]],
+];
+function getPath(o,p){return p.split(".").reduce((a,k)=>(a==null?undefined:a[k]),o);}
+function setPath(o,p,v){const ks=p.split(".");let c=o;
+  for(let i=0;i<ks.length-1;i++){const k=ks[i],nk=ks[i+1],idx=/^\d+$/.test(nk);if(c[k]==null)c[k]=idx?[]:{};c=c[k];}
+  c[ks[ks.length-1]]=v;}
+
+function buildEditorForm(data){
+  const body=$("#eBody");body.innerHTML="";
+  const note=document.createElement("div");note.className="ehint";
+  note.innerHTML="줄바꿈은 <b>Enter</b> 로 넣습니다(헤드라인 한 줄은 12자 이내 권장). 변호사·상담번호·면책문구·배경은 자동 고정되어 편집 대상이 아닙니다.";
+  body.appendChild(note);
+  EDIT_SECTIONS.forEach(([title,fields])=>{
+    const sec=document.createElement("div");sec.className="esec";
+    const h=document.createElement("h3");h.textContent=title;sec.appendChild(h);
+    fields.forEach(([label,k,type])=>{
+      const f=document.createElement("div");f.className="efield";
+      const lab=document.createElement("label");lab.textContent=label;f.appendChild(lab);
+      let el;
+      if(type==="area"){el=document.createElement("textarea");}
+      else{el=document.createElement("input");el.type="text";}
+      el.dataset.k=k;el.dataset.type=type;
+      let v=getPath(data,k);
+      if(type==="csv"&&Array.isArray(v)) v=v.join(", ");
+      el.value=(v==null?"":v);
+      f.appendChild(el);sec.appendChild(f);
+    });
+    body.appendChild(sec);
+  });
+}
+function collectPatch(){
+  const patch={};
+  document.querySelectorAll("#eBody [data-k]").forEach(el=>{
+    const k=el.dataset.k,type=el.dataset.type;
+    if(type==="csv"){
+      const arr=el.value.split(/[,\n]/).map(s=>s.trim().replace(/^#/,"")).filter(Boolean).map(s=>"#"+s);
+      setPath(patch,k,arr);
+    }else setPath(patch,k,el.value);
+  });
+  return patch;
+}
+async function openEditor(){
+  if(!curDir)return;
+  $("#eStatus").textContent="";$("#eStatus").className="estatus";
+  const r=await fetch("/api/draft-data?dir="+encodeURIComponent(curDir));
+  const d=await r.json();
+  if(!d.ok){ alert(d.error); return; }
+  buildEditorForm(d.data);
+  $("#editor").classList.remove("hidden");$("#eBody").scrollTop=0;
+}
+$("#vEdit").onclick=openEditor;
+$("#eClose").onclick=()=>$("#editor").classList.add("hidden");
+$("#eSave").onclick=async()=>{
+  const patch=collectPatch();
+  const st=$("#eStatus"),btn=$("#eSave");
+  btn.disabled=true;st.className="estatus";st.innerHTML='<span class="spinner"></span>저장하고 카드 10장을 다시 렌더링 중… 20~40초 걸릴 수 있습니다.';
+  try{
+    const r=await fetch("/api/edit",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({dir:curDir,patch})});
+    const d=await r.json();
+    if(!d.ok) throw new Error(d.error);
+    st.className="estatus ok";st.textContent="저장 완료. 다시 검수해 주세요.";
+    renderCards(d.cards,true);              // 새 이미지로 교체(캐시 무시)
+    $("#vCaption").textContent=d.caption||"";
+    setBadge("pending");
+    setTimeout(()=>$("#editor").classList.add("hidden"),700);
+  }catch(e){ st.className="estatus err";st.innerHTML="실패: "+esc(e.message).replace(/\n/g,"<br>"); }
+  finally{ btn.disabled=false; }
+};
 
 // ---- 생성 ----
 async function loadStatus(){

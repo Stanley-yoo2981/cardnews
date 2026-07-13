@@ -12,7 +12,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { google } from "googleapis";
 
-const ROOT_FOLDER = "SNS 카드뉴스";
+// 최상위 폴더명(기본 "카드뉴스"). 그 아래에 '날짜(KST)_사건명' 하위폴더가 쌓인다.
+const ROOT_FOLDER = process.env.GDRIVE_ROOT_FOLDER || "카드뉴스";
 
 export function isConfigured() {
   return Boolean(process.env.GDRIVE_SA_JSON || process.env.GOOGLE_APPLICATION_CREDENTIALS);
@@ -72,7 +73,6 @@ async function findOrCreateFolder(drive, name, parentId) {
 
 async function uploadFile(drive, absPath, parentId, mimeType) {
   const name = path.basename(absPath);
-  // 같은 이름이 있으면 덮지 않고 새로 올린다(이력 보존). 필요 시 정책 변경 가능.
   const res = await drive.files.create({
     requestBody: { name, parents: [parentId] },
     media: { mimeType, body: fs.createReadStream(absPath) },
@@ -80,6 +80,23 @@ async function uploadFile(drive, absPath, parentId, mimeType) {
     ...DRIVE_OPTS,
   });
   return res.data;
+}
+
+// 하위 폴더 안의 기존 파일을 비운다(폴더는 유지). 편집 후 재승인 시 중복 업로드를 막는다.
+async function clearFolderFiles(drive, folderId) {
+  const list = await drive.files.list({
+    q: `'${folderId}' in parents and mimeType != 'application/vnd.google-apps.folder' and trashed = false`,
+    fields: "files(id)",
+    ...DRIVE_OPTS,
+    corpora: "allDrives",
+  });
+  for (const f of list.data.files || []) {
+    try {
+      await drive.files.delete({ fileId: f.id, ...DRIVE_OPTS });
+    } catch {
+      /* 권한/이미 삭제됨 — 무시하고 진행 */
+    }
+  }
 }
 
 /**
@@ -100,7 +117,10 @@ export async function uploadDraft({ dirAbs, title, dateStr }) {
   const subName = `${dateStr || kstDate()}_${sanitizeName(title)}`;
   const subId = await findOrCreateFolder(drive, subName, rootId);
 
-  // 이미지 10장 + 검수 문서 업로드
+  // 편집 후 재승인일 수 있으니, 기존 파일을 비우고 최신본으로 다시 채운다(중복 방지).
+  await clearFolderFiles(drive, subId);
+
+  // 이미지 10장 + 캡션/검수/원본 업로드
   let uploaded = 0;
   for (let i = 1; i <= 10; i++) {
     const f = path.join(dirAbs, `card_${String(i).padStart(2, "0")}.png`);
@@ -112,6 +132,7 @@ export async function uploadDraft({ dirAbs, title, dateStr }) {
   for (const [f, mime] of [
     ["caption.txt", "text/plain"],
     ["review.md", "text/markdown"],
+    ["index.html", "text/html"],
   ]) {
     const p = path.join(dirAbs, f);
     if (fs.existsSync(p)) await uploadFile(drive, p, subId, mime);

@@ -7,7 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import fs from "node:fs";
-import { runPipeline } from "./lib/pipeline.mjs";
+import { runPipeline, renderDraft, applyEditablePatch } from "./lib/pipeline.mjs";
 import { queueStatus, draftsList, setReview, patchDraft } from "./lib/state.mjs";
 import { DATA_DIR, DRAFTS_DIR } from "./lib/paths.mjs";
 import * as gdrive from "./lib/gdrive.mjs";
@@ -26,6 +26,9 @@ function safeDraftDir(rel) {
   if (p !== DRAFTS_DIR && !p.startsWith(DRAFTS_DIR + path.sep)) return null;
   return p;
 }
+
+// 생성/편집은 한 번에 하나만 처리(간단한 잠금). CPU·메모리를 크게 쓰는 렌더를 보호한다.
+let busy = false;
 
 // 현재 상태(다음 회차 / 소진 여부 / 사용 이력)
 app.get("/api/status", (_req, res) => {
@@ -59,6 +62,51 @@ app.get("/api/draft", (req, res) => {
   }
 });
 
+// 편집용 슬라이드 데이터(대용량 배경 bg 는 제외하고 문안만) 조회
+app.get("/api/draft-data", (req, res) => {
+  try {
+    const dir = String(req.query.dir || "");
+    const abs = safeDraftDir(dir);
+    const dataPath = abs && path.join(abs, "data.json");
+    if (!abs || !fs.existsSync(dataPath)) {
+      return res.status(404).json({ ok: false, error: "이 초안에는 편집 데이터가 없습니다(구버전). 다시 생성하면 편집할 수 있습니다." });
+    }
+    const data = JSON.parse(fs.readFileSync(dataPath, "utf8"));
+    const { bg, ...rest } = data;
+    res.json({ ok: true, data: rest, hasBg: Boolean(bg) });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// 편집 저장 + 재렌더: { dir, patch }. 문안만 바꾸고 배경은 그대로 유지한다.
+// 편집 후에는 재검수가 필요하므로 상태를 '검수 대기'로 되돌린다.
+app.post("/api/edit", async (req, res) => {
+  if (busy) {
+    return res.status(409).json({ ok: false, error: "다른 작업이 진행 중입니다. 잠시 후 다시 시도하세요." });
+  }
+  busy = true;
+  try {
+    const { dir, patch } = req.body || {};
+    const abs = safeDraftDir(String(dir || ""));
+    const dataPath = abs && path.join(abs, "data.json");
+    if (!abs || !fs.existsSync(dataPath)) {
+      throw new Error("편집할 초안을 찾지 못했습니다.");
+    }
+    const data = JSON.parse(fs.readFileSync(dataPath, "utf8"));
+    applyEditablePatch(data, patch);
+    await renderDraft(abs, data); // compliance 재검사 포함 — 통과 못 하면 여기서 실패
+    patchDraft(dir, { status: "pending" }); // 편집했으니 다시 검수 대기로
+
+    const relCards = Array.from({ length: 10 }, (_, i) => `${dir}/card_${String(i + 1).padStart(2, "0")}.png`);
+    res.json({ ok: true, cards: relCards, caption: fs.readFileSync(path.join(abs, "caption.txt"), "utf8") });
+  } catch (e) {
+    res.status(400).json({ ok: false, code: e.code || "ERROR", error: e.message });
+  } finally {
+    busy = false;
+  }
+});
+
 // 검수 결과 기록: { dir, status: approved|rejected|pending, reviewer, memo }
 // 승인(=완성)되면 구글 드라이브에 업로드한다(설정된 경우에만).
 app.post("/api/review", async (req, res) => {
@@ -89,8 +137,6 @@ app.post("/api/review", async (req, res) => {
 });
 
 // 생성: { type: "queue" } | { type:"url", url } | { type:"manuscript", manuscript }
-// 한 번에 하나만 처리(간단한 잠금)
-let busy = false;
 app.post("/api/generate", async (req, res) => {
   if (busy) {
     return res.status(409).json({ ok: false, error: "다른 생성이 진행 중입니다. 잠시 후 다시 시도하세요." });

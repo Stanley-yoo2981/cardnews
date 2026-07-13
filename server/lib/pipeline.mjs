@@ -10,6 +10,7 @@ import { promisify } from "node:util";
 import { generateSlides, extractLawyer } from "./generate.mjs";
 import { buildHtml } from "./build.mjs";
 import * as image from "./image.mjs";
+import { backgroundsFromSource } from "./srcimg.mjs";
 import { ROOT, DATA_DIR, DRAFTS_DIR } from "./paths.mjs";
 import {
   normalizeUrl,
@@ -60,7 +61,8 @@ async function fetchArticle(url) {
   if (text.length < 200) {
     throw new Error("본문을 충분히 추출하지 못했습니다. 원고를 붙여넣어 주세요.");
   }
-  return text;
+  // 원문 HTML 도 함께 돌려준다(배경으로 쓸 삽입 이미지 추출용).
+  return { text, html };
 }
 
 function draftDir(dateStr, id) {
@@ -78,6 +80,60 @@ function writeCaption(dir, data) {
     tags.map((t) => (t.startsWith("#") ? t : "#" + t)).join(" ") +
     "\n";
   fs.writeFileSync(path.join(dir, "caption.txt"), body);
+}
+
+// 편집 가능한 필드만 추려 data 에 반영한다(서버가 받은 patch 를 신뢰하지 않는다).
+// 배경(bg)·변호사(lawyer) 등 안전에 민감한 값은 편집 대상이 아니다.
+const EDIT_TEXT = ["category", "cover_h1", "cover_h1_em", "cover_quote", "cta_h1", "cta_h1_em", "caption"];
+const EDIT_SLIDES = ["s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9"];
+const EDIT_SLIDE_TEXT = ["kicker", "h1", "h1_em", "sub", "vs_a_title", "vs_a_desc", "vs_b_title", "vs_b_desc"];
+
+export function applyEditablePatch(data, patch) {
+  if (!patch || typeof patch !== "object") return data;
+  const str = (v) => String(v ?? "");
+  for (const k of EDIT_TEXT) if (k in patch) data[k] = str(patch[k]);
+  if (Array.isArray(patch.hashtags)) data.hashtags = patch.hashtags.map(str).slice(0, 8);
+
+  for (const s of EDIT_SLIDES) {
+    const p = patch[s];
+    if (!p || typeof p !== "object") continue;
+    data[s] = data[s] || {};
+    for (const f of EDIT_SLIDE_TEXT) if (f in p) data[s][f] = str(p[f]);
+    if (Array.isArray(p.stats))
+      data[s].stats = p.stats
+        .map((x) => ({ label: str(x && x.label), value: str(x && x.value) }))
+        .filter((x) => x.label || x.value)
+        .slice(0, 3);
+    if (Array.isArray(p.cards))
+      data[s].cards = p.cards
+        .map((x) => ({ title: str(x && x.title), desc: str(x && x.desc) }))
+        .filter((x) => x.title || x.desc)
+        .slice(0, 3);
+    if (Array.isArray(p.checks)) data[s].checks = p.checks.map(str).filter(Boolean).slice(0, 4);
+  }
+  return data;
+}
+
+// 슬라이드 데이터 → index.html + compliance 게이트 + PNG 10장 + caption.txt + data.json.
+// 최초 생성과 편집(재렌더)에서 공통으로 쓴다. compliance 실패 시 렌더로 넘어가지 않는다.
+export async function renderDraft(dir, data) {
+  const indexPath = path.join(dir, "index.html");
+  fs.writeFileSync(indexPath, buildHtml(data));
+
+  try {
+    await execFileP("node", ["scripts/compliance.mjs", indexPath], { cwd: ROOT });
+  } catch (e) {
+    const out = (e.stdout || "") + (e.stderr || "");
+    const err = new Error("컴플라이언스 검사 실패로 초안을 폐기했습니다.\n" + out.trim());
+    err.code = "COMPLIANCE_FAILED";
+    throw err;
+  }
+
+  await execFileP("node", ["scripts/render.mjs", dir], { cwd: ROOT, env: process.env });
+
+  writeCaption(dir, data);
+  // 편집용 원본 데이터(배경 포함) 저장 — 나중에 편집 시 같은 배경으로 재빌드한다.
+  fs.writeFileSync(path.join(dir, "data.json"), JSON.stringify(data));
 }
 
 function writeReview(dir, data, meta) {
@@ -110,6 +166,7 @@ function writeReview(dir, data, meta) {
  */
 export async function runPipeline(input) {
   let articleText;
+  let articleHtml = null; // 원문 HTML(있으면 배경 이미지 추출에 사용)
   let key;
   let id;
   let dateStr = TODAY();
@@ -130,7 +187,7 @@ export async function runPipeline(input) {
     urlForRecord = item.url;
     source = `큐 #${item.id} · ${item.url}`;
     title = `성공사례 ${item.id}`;
-    articleText = await fetchArticle(item.url);
+    ({ text: articleText, html: articleHtml } = await fetchArticle(item.url));
   } else if (input.type === "url") {
     const url = String(input.url || "").trim();
     if (!url) throw new Error("URL이 비어 있습니다.");
@@ -145,7 +202,7 @@ export async function runPipeline(input) {
     id = tail || "url" + Date.now().toString().slice(-6);
     source = url;
     title = tail ? `성공사례 ${tail}` : "직접 첨부 URL";
-    articleText = await fetchArticle(url);
+    ({ text: articleText, html: articleHtml } = await fetchArticle(url));
   } else if (input.type === "manuscript") {
     articleText = String(input.manuscript || "").trim();
     if (!articleText) throw new Error("원고가 비어 있습니다.");
@@ -166,35 +223,36 @@ export async function runPipeline(input) {
   const lawyerHint = extractLawyer(articleText);
   const data = await generateSlides(articleText, { lawyerHint });
 
-  // AI 배경 이미지(선택). 실패해도 CSS 배경으로 폴백하고 계속 진행한다.
-  if (image.isEnabled()) {
+  // 배경 이미지. 우선순위:
+  //  1) 원문 URL 에 삽입된 실제 이미지(블러 처리해 배경으로) — 현실감 있는 결과
+  //  2) AI 생성 배경(CARDNEWS_IMAGES=on 일 때)
+  //  3) 둘 다 없으면 CSS 추상 메쉬(build.mjs 폴백)
+  // 어느 단계든 실패하면 다음 폴백으로 넘어가며, 최종적으로는 항상 렌더된다.
+  if (articleHtml && urlForRecord) {
+    try {
+      const bg = await backgroundsFromSource(articleHtml, urlForRecord, { cap: 4 });
+      if (Object.keys(bg).length) {
+        data.bg = bg;
+        data.bgKind = "src"; // build.mjs 가 원문 사진에 더 강한 블러를 준다
+      }
+    } catch (e) {
+      console.error("[srcimg] 원문 이미지 배경 건너뜀:", e.message);
+    }
+  }
+  if (!data.bg && image.isEnabled()) {
     try {
       data.bg = await image.generateBackgrounds(data);
+      data.bgKind = "ai";
     } catch (e) {
       console.error("[image] 배경 생성 건너뜀:", e.message);
     }
   }
 
-  // 빌드
+  // 빌드 → compliance → 렌더 → caption/data.json (편집 시에도 재사용하는 공통 경로)
   const dir = draftDir(dateStr, id);
-  const indexPath = path.join(dir, "index.html");
-  fs.writeFileSync(indexPath, buildHtml(data));
+  await renderDraft(dir, data);
 
-  // 컴플라이언스 게이트 (에이전트를 믿지 않고 스크립트로 재검사)
-  try {
-    await execFileP("node", ["scripts/compliance.mjs", indexPath], { cwd: ROOT });
-  } catch (e) {
-    const out = (e.stdout || "") + (e.stderr || "");
-    const err = new Error("컴플라이언스 검사 실패로 초안을 폐기했습니다.\n" + out.trim());
-    err.code = "COMPLIANCE_FAILED";
-    throw err;
-  }
-
-  // 렌더 (PNG 10장)
-  await execFileP("node", ["scripts/render.mjs", dir], { cwd: ROOT, env: process.env });
-
-  // caption / review
-  writeCaption(dir, data);
+  // review.md (근거 매핑) — 최초 생성 때만 만든다.
   writeReview(dir, data, { label: `${dateStr}_${id}`, source });
 
   // 사용 이력 기록 (중복 방지). category 는 드라이브 하위폴더 '제목'으로 쓰인다.

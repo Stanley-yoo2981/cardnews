@@ -31,17 +31,25 @@ const esc = (s) =>
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 
-// 줄바꿈(\n) → <br>, 그리고 강조어(em)를 금색으로. 강조는 esc 이후에 처리.
+// 헤드라인: 각 줄(\n 기준)을 '한 줄 = 안 깨지는 블록'(.ln)으로 만든다.
+// 이렇게 하면 작성자가 의도한 위치에서만 줄이 바뀌고, 한 줄이 중간에서
+// 어색하게 접히지 않는다("혼자 감당하지 말고" 가 "말고" 로 넘어가던 문제 해결).
+// 강조어(em)는 해당 줄 안에서 한 번만 금색 처리한다.
 function headline(text, emphasis) {
-  let html = esc(text).replace(/\n/g, "<br>");
   const em = (emphasis || "").trim();
-  if (em) {
-    const emEsc = esc(em);
-    if (html.includes(emEsc)) {
-      html = html.replace(emEsc, `<em>${emEsc}</em>`);
-    }
-  }
-  return html;
+  const emEsc = em ? esc(em) : "";
+  let emDone = false;
+  return String(text ?? "")
+    .split("\n")
+    .map((line) => {
+      let h = esc(line);
+      if (emEsc && !emDone && h.includes(emEsc)) {
+        h = h.replace(emEsc, `<em>${emEsc}</em>`);
+        emDone = true;
+      }
+      return `<span class="ln">${h}</span>`;
+    })
+    .join("");
 }
 const ml = (s) => esc(s).replace(/\n/g, "<br>");
 
@@ -60,26 +68,48 @@ function lawyerImageDataUri(name) {
   return `data:image/png;base64,${b64}`;
 }
 
-// 공통 배경. AI 배경 이미지(uri)가 있으면 .bg 에 깔고(블러·어둡게 처리 내장),
-// 없으면 기존 CSS 메쉬로 폴백한다. scrim/grain 은 항상 얹어 가독성 확보.
-function bg(seed = 0, uri = null) {
+// 법무법인 여온 로고(가로·화이트). assets/lawyers/ 에 있으면 카드 우측 상단에 넣는다.
+// 파일이 아직 없으면 null → top() 이 텍스트 브랜드로 폴백한다.
+const LOGO_FILE = "법무법인여온logo-w_가로.png";
+let _logoUri; // 캐시(undefined=미확인, null=없음, string=데이터URI)
+function logoDataUri() {
+  if (_logoUri !== undefined) return _logoUri;
+  try {
+    const p = path.join(ROOT, "assets", "lawyers", LOGO_FILE);
+    _logoUri = `data:image/png;base64,${fs.readFileSync(p).toString("base64")}`;
+  } catch {
+    _logoUri = null;
+  }
+  return _logoUri;
+}
+
+// 공통 배경.
+//  - uri 가 있으면 .bg 에 깔고 강하게 블러/어둡게 처리한다(CSS 에 내장).
+//    kind="src"(원문 사진)면 .bg.src 로 더 강한 블러를 줘 세부를 지운다.
+//  - 없으면 CSS 메쉬로 폴백한다(더 선명한 브랜드 색).
+// scrim/grain 은 항상 얹어 가독성을 확보한다.
+function bg(seed = 0, uri = null, kind = "ai") {
   if (uri) {
     const safe = String(uri).replace(/"/g, "&quot;");
-    return `<div class="bg" style="background-image:url(&quot;${safe}&quot;)"></div><div class="grain"></div><div class="scrim"></div>`;
+    const cls = kind === "src" ? "bg src" : "bg";
+    return `<div class="${cls}" style="background-image:url(&quot;${safe}&quot;)"></div><div class="grain"></div><div class="scrim"></div>`;
   }
+  // 더 선명하고 채도 높은 브랜드 배경(네이비 + 골드 글로우 + 청록 포인트).
   const sets = [
     [
-      "width:60%;height:50%;left:-8%;top:2%;background:radial-gradient(circle at 50% 50%, #1D3A63 0%, rgba(29,58,99,0.55) 42%, rgba(29,58,99,0) 72%)",
-      "width:52%;height:44%;right:-10%;top:26%;background:radial-gradient(circle at 50% 50%, #3A2E1C 0%, rgba(58,46,28,0.55) 42%, rgba(58,46,28,0) 72%)",
-      "width:70%;height:46%;left:10%;bottom:-12%;background:radial-gradient(circle at 50% 50%, #0C1728 0%, rgba(12,23,40,0.55) 42%, rgba(12,23,40,0) 72%)",
+      "width:66%;height:54%;left:-8%;top:0%;background:radial-gradient(circle at 50% 50%, #245089 0%, rgba(36,80,137,0.5) 44%, rgba(36,80,137,0) 72%)",
+      "width:54%;height:46%;right:-10%;top:22%;background:radial-gradient(circle at 50% 50%, #C8A560 0%, rgba(200,165,96,0.34) 40%, rgba(200,165,96,0) 70%)",
+      "width:72%;height:48%;left:8%;bottom:-14%;background:radial-gradient(circle at 50% 50%, #0B1A30 0%, rgba(11,26,48,0.6) 44%, rgba(11,26,48,0) 74%)",
     ],
     [
-      "width:64%;height:48%;right:-12%;top:-6%;background:radial-gradient(circle at 50% 50%, #20406C 0%, rgba(32,64,108,0.55) 42%, rgba(32,64,108,0) 72%)",
-      "width:46%;height:40%;left:-6%;bottom:6%;background:radial-gradient(circle at 50% 50%, #2E2A20 0%, rgba(46,42,32,0.55) 42%, rgba(46,42,32,0) 72%)",
+      "width:68%;height:52%;right:-12%;top:-6%;background:radial-gradient(circle at 50% 50%, #285A97 0%, rgba(40,90,151,0.5) 44%, rgba(40,90,151,0) 72%)",
+      "width:50%;height:44%;left:-6%;bottom:4%;background:radial-gradient(circle at 50% 50%, #D4B36C 0%, rgba(212,179,108,0.3) 40%, rgba(212,179,108,0) 70%)",
+      "width:44%;height:40%;left:26%;top:8%;background:radial-gradient(circle at 50% 50%, #17708A 0%, rgba(23,112,138,0.28) 42%, rgba(23,112,138,0) 70%)",
     ],
     [
-      "width:58%;height:52%;left:-10%;top:8%;background:radial-gradient(circle at 50% 50%, #14263F 0%, rgba(20,38,63,0.55) 42%, rgba(20,38,63,0) 72%)",
-      "width:50%;height:44%;right:-8%;bottom:-8%;background:radial-gradient(circle at 50% 50%, #3B3120 0%, rgba(59,49,32,0.55) 42%, rgba(59,49,32,0) 72%)",
+      "width:62%;height:56%;left:-10%;top:6%;background:radial-gradient(circle at 50% 50%, #1E4576 0%, rgba(30,69,118,0.5) 44%, rgba(30,69,118,0) 72%)",
+      "width:52%;height:46%;right:-8%;bottom:-8%;background:radial-gradient(circle at 50% 50%, #C8A560 0%, rgba(200,165,96,0.32) 40%, rgba(200,165,96,0) 70%)",
+      "width:40%;height:38%;right:20%;top:0%;background:radial-gradient(circle at 50% 50%, #123A5E 0%, rgba(18,58,94,0.4) 44%, rgba(18,58,94,0) 72%)",
     ],
   ];
   const set = sets[seed % sets.length];
@@ -89,6 +119,11 @@ function bg(seed = 0, uri = null) {
 
 function top(n) {
   const pg = String(n).padStart(2, "0");
+  const logo = logoDataUri();
+  // 로고가 있으면: 좌측 페이지번호 · 우측 상단 로고. 없으면 기존 텍스트 브랜드.
+  if (logo) {
+    return `<div class="top"><div class="pg">${pg} / 10</div><img class="logo" alt="${BRAND}" src="${logo}" /></div>`;
+  }
   return `<div class="top"><div class="brand"><div class="dot"></div><span>${BRAND}</span></div><div class="pg">${pg} / 10</div></div>`;
 }
 
@@ -108,23 +143,56 @@ function coverClass(text) {
   return c === "" ? "" : c; // 커버 오버라이드 CSS 가 처리
 }
 
-// template CSS 위에 얹는 정제 스타일: 더 작은 폴백 크기 + 가독성/디테일.
+// template CSS 위에 얹는 정제 스타일: 더 작은 폴백 크기 + 가독성/디테일 + 색감 강화.
 const REFINE = `
 /* --- PRO 정제 --- */
-h1{text-shadow:0 2px 34px rgba(6,10,18,.35);text-wrap:balance}
+:root{--gold-hot:#F2CD73}
+
+/* 헤드라인: 각 줄을 '안 깨지는 블록'으로 — 의도한 위치에서만 개행된다. */
+h1 .ln{display:block;white-space:nowrap}
+h1{text-shadow:0 2px 34px rgba(6,10,18,.42)}
 h1.xxs{font-size:60px;line-height:1.16;letter-spacing:-.035em}
 .cover h1.sm{font-size:96px}
 .cover h1.xs{font-size:82px}
 .cover h1.xxs{font-size:70px;line-height:1.16}
+
+/* 강조어 — 더 밝은 금색 + 은은한 글로우로 시선을 잡는다. */
+h1 em{color:var(--gold-hot);text-shadow:0 0 32px rgba(242,205,115,.35)}
+h1 .u{background:linear-gradient(transparent 60%,rgba(242,205,115,.4) 60%)}
+
+/* 키커 배지 — 금색 글자/테두리를 또렷하게. */
+.kicker{backdrop-filter:blur(2px);color:var(--gold-hot);font-weight:700;
+  border-color:rgba(200,165,96,.55);background:rgba(200,165,96,.12)}
+
+/* 넘버 마커·페이지·스와이프 화살표를 금색으로 살려 브랜드감을 키운다. */
+.num{color:rgba(200,165,96,.24)}
+.pg,.foot .swipe{color:var(--gold-hot)}
+
+/* 우측 상단 로고(가로·화이트) */
+.top{align-items:flex-start}
+.top .logo{height:50px;width:auto;max-width:340px;object-fit:contain;display:block;
+  filter:drop-shadow(0 2px 10px rgba(0,0,0,.35))}
+
+/* 하단 강조 바 — 더 굵고 선명하게. */
+.bar{height:3px;border-radius:3px;
+  background:linear-gradient(90deg,var(--gold-hot),var(--gold) 42%,rgba(200,165,96,0))}
+
+/* 카드·스탯 포인트 색 강화. */
+.card b{background:var(--gold-hot)}
+.stats strong{line-height:1.2;color:var(--gold-hot)}
+.vs .b{background:rgba(242,205,115,.16);border-color:rgba(242,205,115,.5)}
+
 .sub{text-wrap:pretty}
 .sub.tight{font-size:33px;line-height:1.55}
-.kicker{backdrop-filter:blur(2px)}
 .card p small{color:rgba(246,243,237,.66)}
-.stats strong{line-height:1.2}
-/* 배경 그라데이션 살짝 더 깊게 — 텍스트 대비 확보 */
+
+/* 원문 사진을 배경으로 쓸 때: 세부(인물·글자)가 안 보이도록 더 강한 블러 + 어둡게. */
+.slide .bg.src{filter:blur(26px) saturate(.72) brightness(.34);inset:-14%;transform:scale(1.14)}
+
+/* 배경 그라데이션을 더 깊게 — 텍스트 대비 확보. */
 .slide .scrim{background:
-  linear-gradient(180deg,rgba(10,16,28,.78) 0%,rgba(10,16,28,.42) 32%,rgba(10,16,28,.66) 66%,rgba(10,16,28,.95) 100%),
-  radial-gradient(120% 80% at 50% 112%,rgba(10,16,28,.9),transparent 60%)}
+  linear-gradient(180deg,rgba(9,14,25,.82) 0%,rgba(9,14,25,.46) 32%,rgba(9,14,25,.7) 66%,rgba(9,14,25,.96) 100%),
+  radial-gradient(120% 80% at 50% 112%,rgba(9,14,25,.92),transparent 60%)}
 `;
 
 function subClass(text) {
@@ -133,10 +201,10 @@ function subClass(text) {
 }
 
 // --- 각 슬라이드 ---
-function slideCover(d, bgUri) {
+function slideCover(d, bgUri, kind) {
   return `
   <section class="slide cover" data-n="01">
-    ${bg(0, bgUri)}
+    ${bg(0, bgUri, kind)}
     <div class="inner">
       ${top(1)}
       <div class="body-area">
@@ -149,10 +217,10 @@ function slideCover(d, bgUri) {
   </section>`;
 }
 
-function slideText(n, d, tag, bgUri) {
+function slideText(n, d, tag, bgUri, kind) {
   return `
   <section class="slide" data-n="${String(n).padStart(2, "0")}">
-    ${bg(n, bgUri)}
+    ${bg(n, bgUri, kind)}
     <div class="inner">
       ${top(n)}
       <div class="body-area">
@@ -167,10 +235,10 @@ function slideText(n, d, tag, bgUri) {
   </section>`;
 }
 
-function slideVs(d, bgUri) {
+function slideVs(d, bgUri, kind) {
   return `
   <section class="slide" data-n="05">
-    ${bg(5, bgUri)}
+    ${bg(5, bgUri, kind)}
     <div class="inner">
       ${top(5)}
       <div class="body-area">
@@ -187,7 +255,7 @@ function slideVs(d, bgUri) {
   </section>`;
 }
 
-function slideStats(d, bgUri) {
+function slideStats(d, bgUri, kind) {
   const stats = Array.isArray(d.stats) ? d.stats.slice(0, 3) : [];
   const statsHtml = stats.length
     ? `<div class="stats">${stats
@@ -196,7 +264,7 @@ function slideStats(d, bgUri) {
     : "";
   return `
   <section class="slide" data-n="06">
-    ${bg(6, bgUri)}
+    ${bg(6, bgUri, kind)}
     <div class="save">저장 포인트</div>
     <div class="inner">
       ${top(6)}
@@ -211,7 +279,7 @@ function slideStats(d, bgUri) {
   </section>`;
 }
 
-function slideCards(d, bgUri) {
+function slideCards(d, bgUri, kind) {
   const cards = (Array.isArray(d.cards) ? d.cards.slice(0, 3) : [])
     .map(
       (c, i) =>
@@ -222,7 +290,7 @@ function slideCards(d, bgUri) {
     .join("");
   return `
   <section class="slide" data-n="07">
-    ${bg(7, bgUri)}
+    ${bg(7, bgUri, kind)}
     <div class="inner">
       ${top(7)}
       <div class="body-area">
@@ -235,13 +303,13 @@ function slideCards(d, bgUri) {
   </section>`;
 }
 
-function slideChecklist(d, bgUri) {
+function slideChecklist(d, bgUri, kind) {
   const checks = (Array.isArray(d.checks) ? d.checks.slice(0, 4) : [])
     .map((c, i) => `<div class="card"><b>${i + 1}</b><p>${esc(c)}</p></div>`)
     .join("");
   return `
   <section class="slide" data-n="09">
-    ${bg(9, bgUri)}
+    ${bg(9, bgUri, kind)}
     <div class="save">저장해두기</div>
     <div class="inner">
       ${top(9)}
@@ -256,13 +324,13 @@ function slideChecklist(d, bgUri) {
 }
 
 // 10장: 상담 안내 — 고정. 검토 변호사 이름/사진만 주입.
-function slideCta(lawyer, ctaH1, ctaH1Em, bgUri) {
+function slideCta(lawyer, ctaH1, ctaH1Em, bgUri, kind) {
   const img = lawyerImageDataUri(lawyer);
-  const h1 = ctaH1 || "혼자 판단하지 마세요.\n기한은 기다려주지\n않습니다.";
-  const em = ctaH1Em || "기다려주지";
+  const h1 = ctaH1 || "혼자 감당하지 말고\n먼저 물어보세요";
+  const em = ctaH1Em || "먼저";
   return `
   <section class="slide cta" data-n="10">
-    ${bg(10, bgUri)}
+    ${bg(10, bgUri, kind)}
     <div class="inner">
       ${top(10)}
       <div class="lawyer">
@@ -274,7 +342,7 @@ function slideCta(lawyer, ctaH1, ctaH1Em, bgUri) {
         </div>
       </div>
       <div class="body-area">
-        <h1 class="xs">${headline(h1, em)}</h1>
+        <h1 class="${h1Class(h1)}">${headline(h1, em)}</h1>
         <a class="phone" href="tel:0${PHONE.replace(/-/g, "")}" style="text-decoration:none">
           <span>법률 상담 문의</span>
           <strong>${PHONE}</strong>
@@ -292,18 +360,19 @@ function slideCta(lawyer, ctaH1, ctaH1Em, bgUri) {
  * @returns {string} index.html 내용
  */
 export function buildHtml(d) {
-  const B = d.bg || {}; // { 1: dataUri, ... } — AI 배경(선택). 없으면 CSS 메쉬.
+  const B = d.bg || {}; // { 1: dataUri, ... } — 배경 이미지(선택). 없으면 CSS 메쉬.
+  const K = d.bgKind || "ai"; // "src"=원문 사진(강한 블러) | "ai"=AI 생성
   const slides = [
-    slideCover(d, B[1]),
-    slideText(2, d.s2, "여온의 이야기 · 성공사례", B[2]),
-    slideText(3, d.s3, "문제 정의", B[3]),
-    slideText(4, d.s4, "정황 증거의 힘", B[4]),
-    slideVs(d.s5, B[5]),
-    slideStats(d.s6, B[6]),
-    slideCards(d.s7, B[7]),
-    slideText(8, d.s8, "가장 중요한 문장", B[8]),
-    slideChecklist(d.s9, B[9]),
-    slideCta(d.lawyer, d.cta_h1, d.cta_h1_em, B[10]),
+    slideCover(d, B[1], K),
+    slideText(2, d.s2, "여온의 이야기 · 성공사례", B[2], K),
+    slideText(3, d.s3, "문제 정의", B[3], K),
+    slideText(4, d.s4, "정황 증거의 힘", B[4], K),
+    slideVs(d.s5, B[5], K),
+    slideStats(d.s6, B[6], K),
+    slideCards(d.s7, B[7], K),
+    slideText(8, d.s8, "가장 중요한 문장", B[8], K),
+    slideChecklist(d.s9, B[9], K),
+    slideCta(d.lawyer, d.cta_h1, d.cta_h1_em, B[10], K),
   ].join("\n");
 
   return `<!DOCTYPE html>
