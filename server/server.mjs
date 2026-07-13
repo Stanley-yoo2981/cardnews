@@ -10,7 +10,7 @@ import fs from "node:fs";
 import { runPipeline, renderDraft, applyEditablePatch } from "./lib/pipeline.mjs";
 import { queueStatus, draftsList, setReview, patchDraft } from "./lib/state.mjs";
 import { DATA_DIR, DRAFTS_DIR } from "./lib/paths.mjs";
-import * as gdrive from "./lib/gdrive.mjs";
+import * as persist from "./lib/persist.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -49,11 +49,14 @@ app.get("/api/drafts", (_req, res) => {
 });
 
 // 초안 상세: caption / review 본문
-app.get("/api/draft", (req, res) => {
+app.get("/api/draft", async (req, res) => {
   try {
     const dir = String(req.query.dir || "");
     const abs = safeDraftDir(dir);
-    if (!abs || !fs.existsSync(abs)) return res.status(404).json({ ok: false, error: "초안 없음" });
+    if (!abs) return res.status(400).json({ ok: false, error: "잘못된 경로" });
+    // 재시작으로 로컬 파일이 사라졌으면 드라이브에서 복원(이미지·본문·편집원본).
+    try { await persist.ensureDraftLocal(dir); } catch (e) { console.error("[persist]", e.message); }
+    if (!fs.existsSync(abs)) return res.status(404).json({ ok: false, error: "초안 없음" });
     const read = (f) => (fs.existsSync(path.join(abs, f)) ? fs.readFileSync(path.join(abs, f), "utf8") : "");
     const meta = draftsList().find((d) => d.dir === dir) || {};
     res.json({ ok: true, ...meta, caption: read("caption.txt"), review: read("review.md") });
@@ -63,12 +66,14 @@ app.get("/api/draft", (req, res) => {
 });
 
 // 편집용 슬라이드 데이터(대용량 배경 bg 는 제외하고 문안만) 조회
-app.get("/api/draft-data", (req, res) => {
+app.get("/api/draft-data", async (req, res) => {
   try {
     const dir = String(req.query.dir || "");
     const abs = safeDraftDir(dir);
-    const dataPath = abs && path.join(abs, "data.json");
-    if (!abs || !fs.existsSync(dataPath)) {
+    if (!abs) return res.status(400).json({ ok: false, error: "잘못된 경로" });
+    try { await persist.ensureDraftLocal(dir); } catch (e) { console.error("[persist]", e.message); }
+    const dataPath = path.join(abs, "data.json");
+    if (!fs.existsSync(dataPath)) {
       return res.status(404).json({ ok: false, error: "이 초안에는 편집 데이터가 없습니다(구버전). 다시 생성하면 편집할 수 있습니다." });
     }
     const data = JSON.parse(fs.readFileSync(dataPath, "utf8"));
@@ -89,14 +94,18 @@ app.post("/api/edit", async (req, res) => {
   try {
     const { dir, patch } = req.body || {};
     const abs = safeDraftDir(String(dir || ""));
-    const dataPath = abs && path.join(abs, "data.json");
-    if (!abs || !fs.existsSync(dataPath)) {
-      throw new Error("편집할 초안을 찾지 못했습니다.");
-    }
+    if (!abs) throw new Error("편집할 초안을 찾지 못했습니다.");
+    // 재시작으로 편집원본이 사라졌으면 드라이브에서 복원.
+    try { await persist.ensureDraftLocal(dir); } catch (e) { console.error("[persist]", e.message); }
+    const dataPath = path.join(abs, "data.json");
+    if (!fs.existsSync(dataPath)) throw new Error("편집할 초안을 찾지 못했습니다.");
     const data = JSON.parse(fs.readFileSync(dataPath, "utf8"));
     applyEditablePatch(data, patch);
     await renderDraft(abs, data); // compliance 재검사 포함 — 통과 못 하면 여기서 실패
     patchDraft(dir, { status: "pending" }); // 편집했으니 다시 검수 대기로
+
+    // 편집 결과를 드라이브에 다시 백업(이미지·편집원본·목록).
+    await persist.backupDraft(dir);
 
     const relCards = Array.from({ length: 10 }, (_, i) => `${dir}/card_${String(i + 1).padStart(2, "0")}.png`);
     res.json({ ok: true, cards: relCards, caption: fs.readFileSync(path.join(abs, "caption.txt"), "utf8") });
@@ -116,15 +125,19 @@ app.post("/api/review", async (req, res) => {
     if (!abs) return res.status(400).json({ ok: false, error: "잘못된 경로" });
     const e = setReview({ dir, status, reviewer, memo });
 
+    // 검수 결과를 드라이브에 반영. 승인 시 최신본 폴더를 다시 백업하고 링크를 얻는다.
     let drive = null;
-    if (status === "approved" && gdrive.isConfigured()) {
+    if (persist.isOn()) {
       try {
-        const meta = draftsList().find((d) => d.dir === dir) || {};
-        const title = meta.category || meta.title || meta.id || "무제";
-        const dateStr = String(dir).split("/").pop().split("_")[0]; // drafts/YYYY-MM-DD_id
-        const up = await gdrive.uploadDraft({ dirAbs: abs, title, dateStr });
-        patchDraft(dir, { driveUrl: up.folderUrl, driveError: null });
-        drive = { url: up.folderUrl, uploaded: up.uploaded };
+        try { await persist.ensureDraftLocal(dir); } catch (e2) { console.error("[persist]", e2.message); }
+        if (status === "approved") {
+          const up = await persist.archiveDraft(dir);
+          if (up) {
+            patchDraft(dir, { driveUrl: up.folderUrl, driveError: null });
+            drive = { url: up.folderUrl, uploaded: up.uploaded };
+          }
+        }
+        await persist.backupIndex(); // 상태 변경(대기/승인/반려)을 목록에 저장
       } catch (err) {
         patchDraft(dir, { driveError: err.message });
         drive = { error: err.message };
@@ -163,4 +176,11 @@ app.post("/api/generate", async (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`카드뉴스 생성기: http://0.0.0.0:${PORT}  (같은 네트워크의 폰/PC에서 접속 가능)`);
+  // 재시작으로 로컬이 비었으면 드라이브에서 검수함 목록을 복원(설정된 경우).
+  persist
+    .restoreOnBoot()
+    .then((r) => {
+      if (r.restored) console.log(`[persist] 드라이브에서 검수함 ${r.restored}건 복원 완료`);
+    })
+    .catch((e) => console.error("[persist] 부팅 복원 실패:", e.message));
 });

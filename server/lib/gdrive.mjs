@@ -50,6 +50,17 @@ function authClient() {
 
 const DRIVE_OPTS = { supportsAllDrives: true, includeItemsFromAllDrives: true };
 
+// 인증된 drive 클라이언트 하나 만들기(호출부에서 재사용).
+export function getDrive() {
+  return google.drive({ version: "v3", auth: authClient() });
+}
+
+// 최상위 폴더(ROOT_FOLDER) ID — 없으면 만든다.
+export async function rootFolderId(drive) {
+  const parent = process.env.GDRIVE_PARENT_ID || "root";
+  return findOrCreateFolder(drive, ROOT_FOLDER, parent);
+}
+
 async function findOrCreateFolder(drive, name, parentId) {
   const safe = name.replace(/'/g, "\\'");
   const q =
@@ -140,4 +151,111 @@ export async function uploadDraft({ dirAbs, title, dateStr }) {
 
   const meta = await drive.files.get({ fileId: subId, fields: "id, webViewLink", ...DRIVE_OPTS });
   return { folderId: subId, folderUrl: meta.data.webViewLink, uploaded };
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 영구 저장(드라이브를 저장소로) — 검수함 목록/편집용 원본까지 백업·복원한다.
+// ──────────────────────────────────────────────────────────────────────────
+
+// 폴더 안에서 이름으로 파일 하나 찾기(폴더 제외). 없으면 null.
+async function findFileByName(drive, name, parentId) {
+  const safe = name.replace(/'/g, "\\'");
+  const list = await drive.files.list({
+    q: `name = '${safe}' and '${parentId}' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder'`,
+    fields: "files(id, name)",
+    ...DRIVE_OPTS,
+    corpora: "allDrives",
+  });
+  return (list.data.files && list.data.files[0]) || null;
+}
+
+// 루트 폴더에 JSON 파일 하나를 저장(있으면 덮어쓴다). 검수함 인덱스(_index.json)용.
+export async function putJson(drive, name, obj) {
+  const rootId = await rootFolderId(drive);
+  const body = JSON.stringify(obj);
+  const existing = await findFileByName(drive, name, rootId);
+  if (existing) {
+    await drive.files.update({
+      fileId: existing.id,
+      media: { mimeType: "application/json", body },
+      ...DRIVE_OPTS,
+    });
+    return existing.id;
+  }
+  const created = await drive.files.create({
+    requestBody: { name, parents: [rootId], mimeType: "application/json" },
+    media: { mimeType: "application/json", body },
+    fields: "id",
+    ...DRIVE_OPTS,
+  });
+  return created.data.id;
+}
+
+// 루트 폴더의 JSON 파일 읽기. 없으면 null.
+export async function getJson(drive, name) {
+  const rootId = await rootFolderId(drive);
+  const f = await findFileByName(drive, name, rootId);
+  if (!f) return null;
+  const res = await drive.files.get({ fileId: f.id, alt: "media", ...DRIVE_OPTS });
+  const d = res.data;
+  return typeof d === "string" ? JSON.parse(d) : d;
+}
+
+// 초안 폴더(이름=초안 dir basename) 안의 로컬 파일들을 업로드(기존 파일 정리 후).
+export async function uploadFolder(drive, absDir, folderName, files) {
+  const rootId = await rootFolderId(drive);
+  const subId = await findOrCreateFolder(drive, folderName, rootId);
+  await clearFolderFiles(drive, subId);
+  const MIME = {
+    ".png": "image/png",
+    ".txt": "text/plain",
+    ".md": "text/markdown",
+    ".html": "text/html",
+    ".json": "application/json",
+  };
+  let uploaded = 0;
+  for (const f of files) {
+    const abs = path.join(absDir, f);
+    if (!fs.existsSync(abs)) continue;
+    const ext = path.extname(f).toLowerCase();
+    await uploadFile(drive, abs, subId, MIME[ext] || "application/octet-stream");
+    uploaded++;
+  }
+  const meta = await drive.files.get({ fileId: subId, fields: "id, webViewLink", ...DRIVE_OPTS });
+  return { folderId: subId, folderUrl: meta.data.webViewLink, uploaded };
+}
+
+// 초안 폴더(이름=folderName)의 모든 파일을 로컬 absDir 로 내려받는다. 폴더 없으면 0.
+export async function downloadFolder(drive, folderName, absDir) {
+  const rootId = await rootFolderId(drive);
+  const safe = folderName.replace(/'/g, "\\'");
+  const flist = await drive.files.list({
+    q: `name = '${safe}' and '${rootId}' in parents and trashed = false and mimeType = 'application/vnd.google-apps.folder'`,
+    fields: "files(id)",
+    ...DRIVE_OPTS,
+    corpora: "allDrives",
+  });
+  const folder = flist.data.files && flist.data.files[0];
+  if (!folder) return 0;
+  const files = await drive.files.list({
+    q: `'${folder.id}' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder'`,
+    fields: "files(id, name)",
+    ...DRIVE_OPTS,
+    corpora: "allDrives",
+  });
+  fs.mkdirSync(absDir, { recursive: true });
+  let n = 0;
+  for (const f of files.data.files || []) {
+    const dest = path.join(absDir, f.name);
+    const res = await drive.files.get(
+      { fileId: f.id, alt: "media", ...DRIVE_OPTS },
+      { responseType: "stream" }
+    );
+    await new Promise((resolve, reject) => {
+      const ws = fs.createWriteStream(dest);
+      res.data.on("end", resolve).on("error", reject).pipe(ws);
+    });
+    n++;
+  }
+  return n;
 }

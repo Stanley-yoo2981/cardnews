@@ -11,6 +11,7 @@ import { generateSlides, extractLawyer } from "./generate.mjs";
 import { buildHtml } from "./build.mjs";
 import * as image from "./image.mjs";
 import { backgroundsFromSource } from "./srcimg.mjs";
+import * as persist from "./persist.mjs";
 import { ROOT, DATA_DIR, DRAFTS_DIR } from "./paths.mjs";
 import {
   normalizeUrl,
@@ -266,6 +267,9 @@ export async function runPipeline(input) {
     lawyer: data.lawyer,
     dir: relDir,
   });
+
+  // 드라이브 영구 백업(설정된 경우). 실패해도 초안은 이미 만들어졌으므로 계속 진행.
+  await persist.backupDraft(relDir);
 
   const cards = Array.from({ length: 10 }, (_, i) => `${relDir}/card_${String(i + 1).padStart(2, "0")}.png`);
   return {

@@ -43,6 +43,14 @@ export function isUsed(key) {
   return readUsed().used.some((u) => u.key === key);
 }
 
+// 사용 이력 전체를 통째로 덮어쓴다(드라이브에서 검수함을 복원할 때 사용).
+export function overwriteUsed(state) {
+  ensure();
+  const safe = state && Array.isArray(state.used) ? state : { used: [] };
+  fs.writeFileSync(USED_FILE, JSON.stringify(safe, null, 2));
+  return safe;
+}
+
 export function markUsed(entry) {
   ensure();
   const state = readUsed();
