@@ -4,32 +4,32 @@ services:
   - type: web
     name: yeoon-cardnews
     runtime: docker
-    plan: starter          # 영구 디스크는 유료 플랜 필요(무료는 디스크 없음·유휴 시 중지)
-    region: singapore      # 한국과 가까운 리전
+    plan: starter
+    region: singapore
     healthCheckPath: /api/status
     autoDeploy: true
     envVars:
       - key: DATA_DIR
         value: /data
-      - key: ANTHROPIC_API_KEY   # 필수 — 대시보드에서 입력
+      - key: ANTHROPIC_API_KEY
         sync: false
-      - key: OPENAI_API_KEY      # 선택 — AI 배경 쓸 때
+      - key: OPENAI_API_KEY
         sync: false
-      - key: CARDNEWS_IMAGES     # AI 배경 on/off
+      - key: CARDNEWS_IMAGES
         value: "off"
-      - key: IMAGE_MODEL         # gpt-image-1 인증 막히면 dall-e-3
+      - key: IMAGE_MODEL
         value: gpt-image-1
       - key: IMAGE_COUNT
         value: "4"
       - key: IMAGE_QUALITY
         value: low
-      - key: GENERATE_PIN        # 선택 — 생성 잠금
+      - key: GENERATE_PIN
         sync: false
-      - key: GDRIVE_SA_JSON      # 선택 — 구글 드라이브 저장
+      - key: GDRIVE_SA_JSON
         sync: false
-      - key: GDRIVE_PARENT_ID    # 선택
+      - key: GDRIVE_PARENT_ID
         sync: false
-    disks:
-      - name: data
-        mountPath: /data         # drafts/ state/ 영구 보존
-        sizeGB: 1
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 1
