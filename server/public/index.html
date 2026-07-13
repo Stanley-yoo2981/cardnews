@@ -231,6 +231,17 @@ textarea{min-height:150px;resize:vertical;line-height:1.6}
 const $ = (s)=>document.querySelector(s);
 const esc = (s)=>String(s==null?"":s).replace(/</g,"&lt;");
 
+// 응답이 JSON 이 아니면(무료 플랜이 잠들었다 깨어나는 중이면 HTML 오류 페이지가 온다)
+// 알아보기 쉬운 안내로 바꿔 던진다.
+async function safeJson(r){
+  const ct=r.headers.get("content-type")||"";
+  if(ct.includes("application/json")) return r.json();
+  await r.text().catch(()=>"");
+  if([0,429,502,503,504].includes(r.status))
+    throw new Error("서버가 깨어나는 중이거나 잠시 과부하입니다(무료 플랜). 30초~1분 뒤 다시 시도해 주세요.");
+  throw new Error("서버 응답 오류(HTTP "+r.status+"). 잠시 후 다시 시도해 주세요.");
+}
+
 // 탭 전환
 $("#segReview").onclick=()=>{ $("#segReview").classList.add("on");$("#segGen").classList.remove("on");
   $("#viewReview").classList.remove("hidden");$("#viewGen").classList.add("hidden"); loadDrafts(); };
@@ -415,7 +426,7 @@ $("#eSave").onclick=async()=>{
   btn.disabled=true;st.className="estatus";st.innerHTML='<span class="spinner"></span>저장하고 카드 10장을 다시 렌더링 중… 20~40초 걸릴 수 있습니다.';
   try{
     const r=await fetch("/api/edit",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({dir:curDir,patch})});
-    const d=await r.json();
+    const d=await safeJson(r);
     if(!d.ok) throw new Error(d.error);
     st.className="estatus ok";st.textContent="저장 완료. 다시 검수해 주세요.";
     renderCards(d.cards,true);              // 새 이미지로 교체(캐시 무시)
@@ -445,7 +456,7 @@ async function generate(payload,statusEl,btns){
   statusEl.className="status-line";statusEl.innerHTML='<span class="spinner"></span>생성 중… 요약·검수·렌더까지 30초~1분 걸릴 수 있습니다.';
   try{
     const r=await fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
-    const d=await r.json();
+    const d=await safeJson(r);
     if(!d.ok){ statusEl.className="status-line err";statusEl.innerHTML="실패: "+esc(d.error).replace(/\n/g,"<br>"); }
     else{ statusEl.className="status-line ok";statusEl.innerHTML="완료. 검수함에서 확인하세요.";
       $("#segReview").click(); }
