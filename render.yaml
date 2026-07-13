@@ -4,7 +4,7 @@ services:
   - type: web
     name: yeoon-cardnews
     runtime: docker
-    plan: starter
+    plan: free
     region: singapore
     healthCheckPath: /api/status
     autoDeploy: true
