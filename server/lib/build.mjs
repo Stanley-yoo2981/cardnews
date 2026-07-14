@@ -186,8 +186,8 @@ h1 .u{background:linear-gradient(transparent 60%,rgba(242,205,115,.4) 60%)}
 .sub.tight{font-size:33px;line-height:1.55}
 .card p small{color:rgba(246,243,237,.66)}
 
-/* 원문 사진을 배경으로 쓸 때: 세부(인물·글자)가 안 보이도록 더 강한 블러 + 어둡게. */
-.slide .bg.src{filter:blur(26px) saturate(.72) brightness(.34);inset:-14%;transform:scale(1.14)}
+/* 원문 사진을 배경으로 쓸 때: 형체가 보일 정도의 은은한 블러(가독성은 scrim 이 확보). */
+.slide .bg.src{filter:blur(8px) saturate(.95) brightness(.52);inset:-8%;transform:scale(1.08)}
 
 /* 배경 그라데이션을 더 깊게 — 텍스트 대비 확보. */
 .slide .scrim{background:

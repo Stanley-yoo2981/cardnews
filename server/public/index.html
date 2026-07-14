@@ -266,7 +266,7 @@ async function loadDrafts(){
       const el=document.createElement("div");el.className="ditem";
       const when=d.at?new Date(d.at).toLocaleDateString("ko-KR",{month:"numeric",day:"numeric"}):"";
       el.innerHTML=
-        '<img class="thumb" loading="lazy" onerror="this.style.visibility=\'hidden\'" src="/'+d.cards[0]+'">'+
+        '<img class="thumb" loading="lazy" onerror="this.style.visibility=\'hidden\'" src="/'+(d.thumb||d.cards[0])+'">'+
         '<div class="info"><b>'+esc(d.id)+' · '+(d.lawyer?esc(d.lawyer)+" 변호사":"")+'</b>'+
         '<small>'+when+' · '+esc(d.url||d.title||"")+'</small></div>'+
         '<span class="badge '+d.status+'">'+STATUS_KR[d.status]+'</span>';

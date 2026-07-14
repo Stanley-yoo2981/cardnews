@@ -14,13 +14,6 @@ import { readUsed, overwriteUsed } from "./state.mjs";
 import { DATA_DIR } from "./paths.mjs";
 
 const INDEX = "_index.json"; // 검수함 목록(=state/used.json) 드라이브 사본
-const DRAFT_FILES = [
-  ...Array.from({ length: 10 }, (_, i) => `card_${String(i + 1).padStart(2, "0")}.png`),
-  "caption.txt",
-  "review.md",
-  "index.html",
-  "data.json", // 편집용 원본 — 이게 있어야 재시작 후에도 편집이 된다
-];
 
 export function isOn() {
   return gdrive.isConfigured();
@@ -29,11 +22,21 @@ export function isOn() {
 const absOf = (relDir) => path.resolve(DATA_DIR, relDir);
 const folderNameOf = (relDir) => String(relDir).split("/").pop(); // 초안 dir basename
 
-// 초안 폴더(이미지 10장 + caption/review/index/data.json)를 드라이브에 백업.
+// 초안 폴더 전체(이미지·썸네일·caption/review/index/data.json)를 드라이브에 백업.
 export async function archiveDraft(relDir) {
   if (!isOn()) return null;
+  const abs = absOf(relDir);
+  const files = fs.existsSync(abs)
+    ? fs.readdirSync(abs).filter((f) => {
+        try {
+          return fs.statSync(path.join(abs, f)).isFile();
+        } catch {
+          return false;
+        }
+      })
+    : [];
   const drive = gdrive.getDrive();
-  return gdrive.uploadFolder(drive, absOf(relDir), folderNameOf(relDir), DRAFT_FILES);
+  return gdrive.uploadFolder(drive, abs, folderNameOf(relDir), files);
 }
 
 // 검수함 목록을 드라이브에 저장(상태 변경 때마다 호출).

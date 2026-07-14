@@ -15,8 +15,17 @@ import { google } from "googleapis";
 // 최상위 폴더명(기본 "카드뉴스"). 그 아래에 '날짜(KST)_사건명' 하위폴더가 쌓인다.
 const ROOT_FOLDER = process.env.GDRIVE_ROOT_FOLDER || "카드뉴스";
 
+// OAuth(개인 계정 위임) 방식이 설정돼 있는가.
+function hasOAuth() {
+  return Boolean(
+    process.env.GOOGLE_OAUTH_CLIENT_ID &&
+      process.env.GOOGLE_OAUTH_CLIENT_SECRET &&
+      process.env.GOOGLE_OAUTH_REFRESH_TOKEN
+  );
+}
+
 export function isConfigured() {
-  return Boolean(process.env.GDRIVE_SA_JSON || process.env.GOOGLE_APPLICATION_CREDENTIALS);
+  return Boolean(hasOAuth() || process.env.GDRIVE_SA_JSON || process.env.GOOGLE_APPLICATION_CREDENTIALS);
 }
 
 // 한국 기준 날짜 YYYY-MM-DD
@@ -40,6 +49,17 @@ export function sanitizeName(s) {
 
 function authClient() {
   const scopes = ["https://www.googleapis.com/auth/drive"];
+  // 1) OAuth 방식(개인 Gmail 권장): 내 계정 리프레시 토큰 → 파일이 '내 드라이브'에 저장됨.
+  //    (공유 드라이브를 못 쓰는 계정에서 서비스 계정 대신 사용)
+  if (hasOAuth()) {
+    const o = new google.auth.OAuth2(
+      process.env.GOOGLE_OAUTH_CLIENT_ID,
+      process.env.GOOGLE_OAUTH_CLIENT_SECRET
+    );
+    o.setCredentials({ refresh_token: process.env.GOOGLE_OAUTH_REFRESH_TOKEN });
+    return o;
+  }
+  // 2) 서비스 계정 방식(공유 드라이브 필요)
   if (process.env.GDRIVE_SA_JSON) {
     const creds = JSON.parse(process.env.GDRIVE_SA_JSON);
     return new google.auth.GoogleAuth({ credentials: creds, scopes });
@@ -208,6 +228,9 @@ export async function uploadFolder(drive, absDir, folderName, files) {
   await clearFolderFiles(drive, subId);
   const MIME = {
     ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
     ".txt": "text/plain",
     ".md": "text/markdown",
     ".html": "text/html",

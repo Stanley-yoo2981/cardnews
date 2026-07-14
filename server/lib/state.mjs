@@ -116,6 +116,7 @@ export function draftsList() {
       lawyer: u.lawyer || null,
       url: u.url || null,
       title: u.title || null,
+      thumb: u.thumb || null,
       at: u.at || null,
       category: u.category || null,
       status: u.status || "pending",

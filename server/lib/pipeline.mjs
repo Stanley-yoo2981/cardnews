@@ -72,6 +72,21 @@ function draftDir(dateStr, id) {
   return dir;
 }
 
+// 검수함 썸네일: 원문 대표 이미지(블러 없는 원본)를 파일로 저장한다.
+// data.bg[1] 은 og:image(대표 이미지)를 앞세운 첫 원문 사진. 없으면 null.
+function saveThumb(dir, dataUri) {
+  const m = /^data:(image\/[a-z0-9.+-]+);base64,(.+)$/is.exec(String(dataUri || ""));
+  if (!m) return null;
+  const ext = m[1].split("/")[1].toLowerCase().replace("jpeg", "jpg").replace(/[^a-z0-9]/g, "") || "jpg";
+  const name = `thumb.${ext}`;
+  try {
+    fs.writeFileSync(path.join(dir, name), Buffer.from(m[2], "base64"));
+    return name;
+  } catch {
+    return null;
+  }
+}
+
 function writeCaption(dir, data) {
   const tags = Array.isArray(data.hashtags) ? data.hashtags.slice(0, 8) : [];
   const body =
@@ -259,6 +274,14 @@ export async function runPipeline(input) {
   // 사용 이력 기록 (중복 방지). category 는 드라이브 하위폴더 '제목'으로 쓰인다.
   // relDir 는 DATA_DIR 기준 상대경로("drafts/<name>") → URL(/drafts/...)과 일치.
   const relDir = path.relative(DATA_DIR, dir).split(path.sep).join("/");
+
+  // 검수함 썸네일(블러 없는 원문 대표 이미지). 원문 사진이 있을 때만.
+  let thumb = null;
+  if (data.bgKind === "src" && data.bg && data.bg[1]) {
+    const tn = saveThumb(dir, data.bg[1]);
+    if (tn) thumb = `${relDir}/${tn}`;
+  }
+
   markUsed({
     key,
     url: urlForRecord,
@@ -266,6 +289,7 @@ export async function runPipeline(input) {
     category: data.category || title,
     lawyer: data.lawyer,
     dir: relDir,
+    thumb,
   });
 
   // 드라이브 영구 백업(설정된 경우). 실패해도 초안은 이미 만들어졌으므로 계속 진행.
