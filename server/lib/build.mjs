@@ -72,11 +72,29 @@ function lawyerImageDataUri(name) {
 // 파일이 아직 없으면 null → top() 이 텍스트 브랜드로 폴백한다.
 const LOGO_FILE = "법무법인여온logo-w_가로.png";
 let _logoUri; // 캐시(undefined=미확인, null=없음, string=데이터URI)
+// 로고 파일 찾기 — 맥(NFD)·윈도(NFC) 한글 파일명 차이를 흡수하고, 'logo' 포함 파일로도 폴백.
+function findLogoFile(dir) {
+  if (fs.existsSync(path.join(dir, LOGO_FILE))) return LOGO_FILE;
+  let files;
+  try {
+    files = fs.readdirSync(dir);
+  } catch {
+    return null;
+  }
+  const target = LOGO_FILE.normalize("NFC");
+  return (
+    files.find((f) => f.normalize("NFC") === target) ||
+    files.find((f) => /logo/i.test(f.normalize("NFC"))) ||
+    null
+  );
+}
 function logoDataUri() {
   if (_logoUri !== undefined) return _logoUri;
+  _logoUri = null;
   try {
-    const p = path.join(ROOT, "assets", "lawyers", LOGO_FILE);
-    _logoUri = `data:image/png;base64,${fs.readFileSync(p).toString("base64")}`;
+    const dir = path.join(ROOT, "assets", "lawyers");
+    const file = findLogoFile(dir);
+    if (file) _logoUri = `data:image/png;base64,${fs.readFileSync(path.join(dir, file)).toString("base64")}`;
   } catch {
     _logoUri = null;
   }
@@ -173,6 +191,15 @@ h1 .u{background:linear-gradient(transparent 60%,rgba(242,205,115,.4) 60%)}
 .top .logo{height:50px;width:auto;max-width:340px;object-fit:contain;display:block;
   filter:drop-shadow(0 2px 10px rgba(0,0,0,.35))}
 
+/* 표지 '실제 성공사례' 배지 — 시선을 끄는 솔리드 태그 */
+.cover .realcase{align-self:flex-start;font-size:22px;font-weight:800;letter-spacing:.01em;
+  color:#0A101C;background:var(--gold-hot);padding:9px 18px;border-radius:8px;margin-bottom:18px;
+  box-shadow:0 6px 20px rgba(0,0,0,.35)}
+
+/* 상담 슬라이드 로고(‘법무법인 여온’ 표기 대체) */
+.lawyer .meta small .meta-logo{height:26px;width:auto;max-width:250px;display:block;margin:0 0 6px;
+  filter:drop-shadow(0 1px 6px rgba(0,0,0,.35))}
+
 /* 하단 강조 바 — 더 굵고 선명하게. */
 .bar{height:3px;border-radius:3px;
   background:linear-gradient(90deg,var(--gold-hot),var(--gold) 42%,rgba(200,165,96,0))}
@@ -254,6 +281,7 @@ function slideCover(d, bgUri, kind) {
     <div class="inner">
       ${top(1)}
       <div class="body-area">
+        <div class="realcase">실제 성공사례</div>
         <div class="kicker">${esc(d.category)}</div>
         <h1 class="${coverClass(d.cover_h1)}">${headline(d.cover_h1, d.cover_h1_em)}</h1>
         ${d.cover_quote ? `<p class="quote">${ml(d.cover_quote)}</p>` : ""}
@@ -374,6 +402,9 @@ function slideCta(lawyer, ctaH1, ctaH1Em, bgUri, kind) {
   const img = lawyerImageDataUri(lawyer);
   const h1 = ctaH1 || "혼자 감당하지 말고\n먼저 물어보세요";
   const em = ctaH1Em || "먼저";
+  // '법무법인 여온' 표기는 로고가 있으면 로고 이미지로, 없으면 텍스트로.
+  const logo = logoDataUri();
+  const brandMark = logo ? `<img class="meta-logo" alt="${esc(BRAND)}" src="${logo}" />` : esc(BRAND);
   return `
   <section class="slide cta" data-n="10">
     ${bg(10, bgUri, kind)}
@@ -384,7 +415,7 @@ function slideCta(lawyer, ctaH1, ctaH1Em, bgUri, kind) {
         <div class="meta">
           <em>이 사례를 검토한 변호사</em>
           <strong>${esc(lawyer)} 변호사</strong>
-          <small>${BRAND}<br>가사 · 이혼 사건</small>
+          <small>${brandMark}<br>가사 · 이혼 사건</small>
         </div>
       </div>
       <div class="body-area">
