@@ -186,18 +186,64 @@ h1 .u{background:linear-gradient(transparent 60%,rgba(242,205,115,.4) 60%)}
 .sub.tight{font-size:33px;line-height:1.55}
 .card p small{color:rgba(246,243,237,.66)}
 
-/* 원문 사진을 배경으로 쓸 때: 형체가 보일 정도의 은은한 블러(가독성은 scrim 이 확보). */
-.slide .bg.src{filter:blur(8px) saturate(.95) brightness(.52);inset:-8%;transform:scale(1.08)}
+/* 원문 사진 배경: 블러 없이 선명하게. 가독성은 아래 하단 그라데이션이 확보한다. */
+.slide .bg.src{filter:brightness(.92) contrast(1.02);inset:0;transform:none}
 
-/* 배경 그라데이션을 더 깊게 — 텍스트 대비 확보. */
-.slide .scrim{background:
-  linear-gradient(180deg,rgba(9,14,25,.82) 0%,rgba(9,14,25,.46) 32%,rgba(9,14,25,.7) 66%,rgba(9,14,25,.96) 100%),
-  radial-gradient(120% 80% at 50% 112%,rgba(9,14,25,.92),transparent 60%)}
+/* 하단부터 검정이 짙어지는 그라데이션(뉴스카드 스타일):
+   위쪽은 이미지가 선명히 보이고, 아래로 갈수록 어두워져 흰 글자가 읽힌다. */
+.slide .scrim{background:linear-gradient(to bottom,
+  rgba(6,10,18,.5) 0%, rgba(6,10,18,.14) 11%, rgba(6,10,18,0) 32%,
+  rgba(6,10,18,.34) 54%, rgba(6,10,18,.72) 74%, rgba(6,10,18,.9) 88%, rgba(6,10,18,.98) 100%)}
+
+/* 선명한 이미지 위 가독성 — 텍스트 그림자 보강 + 표지 텍스트 하단 배치 */
+h1{text-shadow:0 2px 20px rgba(0,0,0,.55),0 1px 2px rgba(0,0,0,.5)}
+.sub{text-shadow:0 1px 12px rgba(0,0,0,.55)}
+.foot .tag,.foot .swipe,.cover .quote{text-shadow:0 1px 8px rgba(0,0,0,.5)}
+.cover .body-area{justify-content:flex-end}
 `;
 
 function subClass(text) {
   const len = String(text || "").replace(/\n/g, "").length;
   return len >= 78 ? "sub tight" : "sub";
+}
+
+// ── 프리셋 스타일(편집기에서 고른 값) ─────────────────────────────────────
+// 글꼴(전체) · 강조색(전체) · 헤드라인 크기(슬라이드별) · 상하 위치(슬라이드별)
+const FONTS = {
+  sans: { family: "'Pretendard','Apple SD Gothic Neo','Noto Sans KR',sans-serif", link: "" },
+  serif: {
+    family: "'Noto Serif KR',serif",
+    link: '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;800;900&display=swap" />',
+  },
+  gothic: {
+    family: "'Gothic A1','Pretendard',sans-serif",
+    link: '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@500;700;900&display=swap" />',
+  },
+};
+const ACCENTS = { gold: "#F2CD73", teal: "#59D0C4", sky: "#7FB6EE", coral: "#F2937B", white: "#F6F3ED" };
+const SIZE_PX = { small: 64, normal: 84, large: 104, xlarge: 124 };
+
+function styleHead(S) {
+  const font = FONTS[S.font] || FONTS.sans;
+  const accent = ACCENTS[S.accent] || ACCENTS.gold;
+  const css = `.stage{font-family:${font.family}}\n:root{--gold-hot:${accent}}`;
+  return { link: font.link, css };
+}
+
+// 슬라이드별 인라인 스타일(헤드라인 크기 / 본문 상하 위치). 값이 없으면 빈 문자열.
+function slideSty(S, key) {
+  const s = (S && S.slides && S.slides[key]) || {};
+  const px = SIZE_PX[s.size];
+  const h1 = px ? ` style="font-size:${px}px;line-height:1.14"` : "";
+  const area =
+    s.align === "top"
+      ? ` style="justify-content:flex-start"`
+      : s.align === "center"
+      ? ` style="justify-content:center"`
+      : s.align === "bottom"
+      ? ` style="justify-content:flex-end"`
+      : "";
+  return { h1, area };
 }
 
 // --- 각 슬라이드 ---
