@@ -95,6 +95,16 @@ export function applyEditablePatch(data, patch) {
   for (const k of EDIT_TEXT) if (k in patch) data[k] = str(patch[k]);
   if (Array.isArray(patch.hashtags)) data.hashtags = patch.hashtags.map(str).slice(0, 8);
 
+  // 스타일(현재는 로고 크기). "" 이면 기본값으로 되돌린다.
+  if (patch.style && typeof patch.style === "object") {
+    data.style = data.style || {};
+    if ("logo" in patch.style) {
+      const lg = Number(patch.style.logo);
+      if (Number.isFinite(lg) && lg >= 30 && lg <= 160) data.style.logo = Math.round(lg);
+      else delete data.style.logo;
+    }
+  }
+
   for (const s of EDIT_SLIDES) {
     const p = patch[s];
     if (!p || typeof p !== "object") continue;
@@ -285,6 +295,7 @@ export async function runPipeline(input) {
   // relDir 는 DATA_DIR 기준 상대경로("drafts/<name>") → URL(/drafts/...)과 일치.
   const relDir = path.relative(DATA_DIR, dir).split(path.sep).join("/");
 
+  const cardCount = data.verdict && data.verdict.uri ? 11 : 10;
   markUsed({
     key,
     url: urlForRecord,
@@ -292,12 +303,13 @@ export async function runPipeline(input) {
     category: data.category || title,
     lawyer: data.lawyer,
     dir: relDir,
+    cardCount,
   });
 
   // 드라이브 영구 백업(설정된 경우). 실패해도 초안은 이미 만들어졌으므로 계속 진행.
   await persist.backupDraft(relDir);
 
-  const cards = Array.from({ length: 10 }, (_, i) => `${relDir}/card_${String(i + 1).padStart(2, "0")}.png`);
+  const cards = Array.from({ length: cardCount }, (_, i) => `${relDir}/card_${String(i + 1).padStart(2, "0")}.png`);
   return {
     dir,
     relDir,

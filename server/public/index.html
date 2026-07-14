@@ -91,6 +91,14 @@ button{font-family:inherit;cursor:pointer;border:0;border-radius:12px;font-weigh
 .banner{background:rgba(255,180,162,.08);border:1px solid rgba(255,180,162,.28);color:#ffd7cc;
   border-radius:10px;padding:9px 12px;font-size:12px;margin:2px 0 10px}
 
+/* 판결문 선택 다이얼로그 */
+.vmenu{position:fixed;inset:0;z-index:70;background:rgba(4,7,13,.72);display:flex;align-items:center;justify-content:center;padding:20px}
+.vmenu-box{width:100%;max-width:420px;background:#111a2b;border:1px solid var(--line);border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:10px}
+.vmenu-t{font-size:15px;font-weight:800;color:var(--paper);margin-bottom:4px}
+.vmenu-box button{width:100%;padding:14px;font-size:15px;background:rgba(200,165,96,.16);color:var(--gold2);border:1px solid var(--line)}
+.vmenu-box button.ghost{background:transparent;color:var(--mute);border:1px solid rgba(255,255,255,.12)}
+.vmenu-hint{color:var(--mute);font-size:12px;line-height:1.5;margin-top:2px}
+
 /* 편집 오버레이 */
 .editor{position:fixed;inset:0;z-index:60;background:#0b1220;display:flex;flex-direction:column}
 .ehead{display:flex;align-items:center;gap:10px;padding:calc(12px + env(safe-area-inset-top)) 14px 12px;border-bottom:1px solid rgba(255,255,255,.08)}
@@ -104,8 +112,9 @@ button{font-family:inherit;cursor:pointer;border:0;border-radius:12px;font-weigh
   padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.08)}
 .efield{margin-bottom:11px}
 .efield label{display:block;font-size:12px;color:var(--mute);margin-bottom:5px;font-weight:700}
-.efield input,.efield textarea{width:100%;background:rgba(10,16,28,.6);border:1px solid rgba(255,255,255,.14);
+.efield input,.efield textarea,.efield select{width:100%;background:rgba(10,16,28,.6);border:1px solid rgba(255,255,255,.14);
   border-radius:9px;color:var(--paper);font-family:inherit;font-size:14.5px;padding:10px;line-height:1.5}
+.efield select{appearance:none}
 .efield textarea{min-height:64px;resize:vertical}
 .erow{display:flex;gap:8px}.erow .efield{flex:1}
 .ehint{color:var(--mute);font-size:12px;margin:2px 0 12px;line-height:1.5}
@@ -189,6 +198,7 @@ textarea{min-height:150px;resize:vertical;line-height:1.6}
   <div class="vhead">
     <button class="x" id="vClose">✕</button>
     <div class="t" id="vTitle"></div>
+    <button class="ebtn" id="vVerdict">판결문</button>
     <button class="ebtn" id="vEdit">편집</button>
     <span class="badge" id="vBadge"></span>
   </div>
@@ -214,6 +224,20 @@ textarea{min-height:150px;resize:vertical;line-height:1.6}
     </div>
     <div class="status-line" id="vStatus"></div>
   </div>
+</div>
+
+<!-- 판결문 카드 선택 -->
+<div class="vmenu hidden" id="vMenu">
+  <div class="vmenu-box">
+    <div class="vmenu-t">마지막(연락처) 카드 앞에 넣을 <b>판결문 카드</b></div>
+    <button id="vmAttach">📎 판결문 이미지 첨부</button>
+    <button id="vmGen">✨ 없음 · 어울리는 이미지 생성</button>
+    <button id="vmRemove" class="ghost">판결문 카드 빼기</button>
+    <button id="vmClose" class="ghost">닫기</button>
+    <div class="vmenu-hint">판결문에 이름·주민번호 등 개인정보가 보이면 가린 이미지를 올려주세요.</div>
+    <div class="status-line" id="vmStatus"></div>
+  </div>
+  <input type="file" id="verdictFile" accept="image/png,image/jpeg,image/webp" hidden>
 </div>
 
 <!-- 편집 오버레이 -->
@@ -278,10 +302,11 @@ async function loadDrafts(){
 
 // ---- 뷰어 ----
 let curDir=null;
+let curTotal=10;
 function renderCards(cards,bust){
   const box=$("#vCards");box.innerHTML="";
   cards.forEach((c,i)=>{const im=new Image();im.src="/"+c+(bust?("?v="+Date.now()):"");im.alt="card "+(i+1);box.appendChild(im);});
-  box.scrollLeft=0;$("#vCounter").textContent="1 / 10";
+  box.scrollLeft=0;curTotal=cards.length;$("#vCounter").textContent="1 / "+curTotal;
 }
 async function openViewer(dir){
   curDir=dir;
@@ -302,7 +327,7 @@ async function openViewer(dir){
 }
 function setBadge(status){const b=$("#vBadge");b.className="badge "+status;b.textContent=STATUS_KR[status];}
 $("#vClose").onclick=()=>{ $("#viewer").classList.add("hidden");document.body.style.overflow="";loadDrafts(); };
-$("#vCards").onscroll=(e)=>{const el=e.target;const i=Math.round(el.scrollLeft/el.clientWidth)+1;$("#vCounter").textContent=Math.min(10,Math.max(1,i))+" / 10";};
+$("#vCards").onscroll=(e)=>{const el=e.target;const i=Math.round(el.scrollLeft/el.clientWidth)+1;$("#vCounter").textContent=Math.min(curTotal,Math.max(1,i))+" / "+curTotal;};
 
 // 좌우 화살표
 $("#navPrev").onclick=()=>{const el=$("#vCards");el.scrollBy({left:-el.clientWidth,behavior:"smooth"});};
@@ -380,6 +405,16 @@ function buildEditorForm(data){
   const note=document.createElement("div");note.className="ehint";
   note.innerHTML="줄바꿈은 <b>Enter</b> 로 넣습니다(헤드라인 한 줄은 12자 이내 권장). 변호사·상담번호·면책문구·배경은 자동 고정되어 편집 대상이 아닙니다.";
   body.appendChild(note);
+  // 디자인 — 로고 크기
+  const dsec=document.createElement("div");dsec.className="esec";
+  const dh=document.createElement("h3");dh.textContent="디자인";dsec.appendChild(dh);
+  const df=document.createElement("div");df.className="efield";
+  const dl=document.createElement("label");dl.textContent="로고 크기 (좌측 상단)";df.appendChild(dl);
+  const dsel=document.createElement("select");dsel.dataset.styleLogo="1";
+  [["","기본(보통)"],["48","작게"],["64","보통"],["88","크게"],["112","아주 크게"],["136","최대"]].forEach(([v,l])=>{
+    const o=document.createElement("option");o.value=v;o.textContent=l;dsel.appendChild(o);});
+  dsel.value=(data.style&&data.style.logo)?String(data.style.logo):"";
+  df.appendChild(dsel);dsec.appendChild(df);body.appendChild(dsec);
   EDIT_SECTIONS.forEach(([title,fields])=>{
     const sec=document.createElement("div");sec.className="esec";
     const h=document.createElement("h3");h.textContent=title;sec.appendChild(h);
@@ -407,6 +442,8 @@ function collectPatch(){
       setPath(patch,k,arr);
     }else setPath(patch,k,el.value);
   });
+  const logoSel=document.querySelector('#eBody [data-style-logo]');
+  if(logoSel) patch.style=Object.assign(patch.style||{},{logo:logoSel.value});
   return patch;
 }
 async function openEditor(){
@@ -436,6 +473,33 @@ $("#eSave").onclick=async()=>{
   }catch(e){ st.className="estatus err";st.innerHTML="실패: "+esc(e.message).replace(/\n/g,"<br>"); }
   finally{ btn.disabled=false; }
 };
+
+// ---- 판결문 카드 ----
+$("#vVerdict").onclick=()=>{ if(!curDir)return; $("#vmStatus").textContent="";$("#vmStatus").className="status-line"; $("#vMenu").classList.remove("hidden"); };
+$("#vmClose").onclick=()=>$("#vMenu").classList.add("hidden");
+$("#vmAttach").onclick=()=>$("#verdictFile").click();
+$("#verdictFile").onchange=(e)=>{
+  const f=e.target.files[0]; if(!f)return;
+  if(f.size>14*1024*1024){ $("#vmStatus").className="status-line err";$("#vmStatus").textContent="이미지가 너무 큽니다(14MB 이하로).";e.target.value="";return; }
+  const rd=new FileReader();
+  rd.onload=()=>postVerdict({image:rd.result},"판결문 넣고 카드 다시 만드는 중… 20~40초");
+  rd.readAsDataURL(f); e.target.value="";
+};
+$("#vmGen").onclick=()=>postVerdict({generate:true},"어울리는 이미지 생성 + 카드 만드는 중… 30초~1분");
+$("#vmRemove").onclick=()=>postVerdict({remove:true},"판결문 카드 빼는 중…");
+async function postVerdict(payload,label){
+  const st=$("#vmStatus"); st.className="status-line"; st.innerHTML='<span class="spinner"></span>'+label;
+  document.querySelectorAll("#vMenu button").forEach(b=>b.disabled=true);
+  try{
+    const r=await fetch("/api/verdict",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({dir:curDir,...payload})});
+    const d=await safeJson(r);
+    if(!d.ok) throw new Error(d.error);
+    renderCards(d.cards,true); setBadge("pending");
+    st.className="status-line ok"; st.textContent="반영됐어요. 다시 검수해 주세요.";
+    setTimeout(()=>$("#vMenu").classList.add("hidden"),800);
+  }catch(e){ st.className="status-line err"; st.innerHTML="실패: "+esc(e.message).replace(/\n/g,"<br>"); }
+  finally{ document.querySelectorAll("#vMenu button").forEach(b=>b.disabled=false); }
+}
 
 // ---- 생성 ----
 async function loadStatus(){

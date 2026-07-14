@@ -124,7 +124,7 @@ export function draftsList() {
       reviewedAt: u.reviewedAt || null,
       driveUrl: u.driveUrl || null,
       driveError: u.driveError || null,
-      cards: Array.from({ length: 10 }, (_, i) => `${u.dir}/card_${String(i + 1).padStart(2, "0")}.png`),
+      cards: Array.from({ length: u.cardCount || 10 }, (_, i) => `${u.dir}/card_${String(i + 1).padStart(2, "0")}.png`),
     }));
 }
 

@@ -70,7 +70,7 @@ function lawyerImageDataUri(name) {
 
 // 법무법인 여온 로고(가로·화이트). assets/lawyers/ 에 있으면 카드 우측 상단에 넣는다.
 // 파일이 아직 없으면 null → top() 이 텍스트 브랜드로 폴백한다.
-const LOGO_FILE = "법무법인여온logo-w_가로.png";
+const LOGO_FILE = "logo-w.png";
 let _logoUri; // 캐시(undefined=미확인, null=없음, string=데이터URI)
 // 로고 파일 찾기 — 맥(NFD)·윈도(NFC) 한글 파일명 차이를 흡수하고, 'logo' 포함 파일로도 폴백.
 function findLogoFile(dir) {
@@ -135,14 +135,16 @@ function bg(seed = 0, uri = null, kind = "ai") {
   return `<div class="bg"></div><div class="mesh">${mesh}</div><div class="grain"></div><div class="scrim"></div>`;
 }
 
+let _total = 10; // 총 카드 수(판결문 카드가 있으면 11). buildHtml 이 매번 설정한다.
 function top(n) {
   const pg = String(n).padStart(2, "0");
+  const tot = String(_total).padStart(2, "0");
   const logo = logoDataUri();
-  // 로고가 있으면: 좌측 페이지번호 · 우측 상단 로고. 없으면 기존 텍스트 브랜드.
+  // 로고가 있으면: 좌측 상단 로고 · 우측 페이지번호. 없으면 기존 텍스트 브랜드.
   if (logo) {
-    return `<div class="top"><div class="pg">${pg} / 10</div><img class="logo" alt="${BRAND}" src="${logo}" /></div>`;
+    return `<div class="top"><img class="logo" alt="${BRAND}" src="${logo}" /><div class="pg">${pg} / ${tot}</div></div>`;
   }
-  return `<div class="top"><div class="brand"><div class="dot"></div><span>${BRAND}</span></div><div class="pg">${pg} / 10</div></div>`;
+  return `<div class="top"><div class="brand"><div class="dot"></div><span>${BRAND}</span></div><div class="pg">${pg} / ${tot}</div></div>`;
 }
 
 // h1 크기 클래스: 가장 긴 줄 기준으로 자동 축소해 넘침을 막는다(PRO 일관성).
@@ -186,10 +188,10 @@ h1 .u{background:linear-gradient(transparent 60%,rgba(242,205,115,.4) 60%)}
 .num{color:rgba(200,165,96,.24)}
 .pg,.foot .swipe{color:var(--gold-hot)}
 
-/* 우측 상단 로고(가로·화이트) */
+/* 좌측 상단 로고(가로·화이트). 기본 크게, 편집에서 조절 가능(아래 인라인 override). */
 .top{align-items:flex-start}
-.top .logo{height:50px;width:auto;max-width:340px;object-fit:contain;display:block;
-  filter:drop-shadow(0 2px 10px rgba(0,0,0,.35))}
+.top .logo{height:64px;width:auto;max-width:440px;object-fit:contain;display:block;
+  filter:drop-shadow(0 2px 12px rgba(0,0,0,.45))}
 
 /* 표지 '실제 성공사례' 배지 — 시선을 끄는 솔리드 태그 */
 .cover .realcase{align-self:flex-start;font-size:22px;font-weight:800;letter-spacing:.01em;
@@ -199,6 +201,17 @@ h1 .u{background:linear-gradient(transparent 60%,rgba(242,205,115,.4) 60%)}
 /* 상담 슬라이드 로고(‘법무법인 여온’ 표기 대체) */
 .lawyer .meta small .meta-logo{height:26px;width:auto;max-width:250px;display:block;margin:0 0 6px;
   filter:drop-shadow(0 1px 6px rgba(0,0,0,.35))}
+
+/* 판결문 카드(첨부한 실제 판결문을 문서처럼 보여준다) */
+.slide.verdict{background:#0b1220}
+.slide.verdict .vbg{position:absolute;inset:0;z-index:0;background:radial-gradient(120% 90% at 50% 0%,#1a3556 0%,#0A101C 68%)}
+.slide.verdict .inner{z-index:4}
+.slide.verdict .realcase{align-self:flex-start;font-size:22px;font-weight:800;color:#0A101C;
+  background:var(--gold-hot);padding:9px 18px;border-radius:8px;margin:6px 0 4px;box-shadow:0 6px 20px rgba(0,0,0,.35)}
+.slide.verdict .vframe{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;
+  margin:26px 0 20px;background:#fff;border-radius:14px;padding:20px;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.55)}
+.slide.verdict .vshot{max-width:100%;max-height:100%;object-fit:contain;border-radius:4px}
+.slide.verdict .vcap{font-size:28px;color:rgba(246,243,237,.82);text-align:center;padding-bottom:6px}
 
 /* 하단 강조 바 — 더 굵고 선명하게. */
 .bar{height:3px;border-radius:3px;
@@ -397,8 +410,38 @@ function slideChecklist(d, bgUri, kind) {
   </section>`;
 }
 
-// 10장: 상담 안내 — 고정. 검토 변호사 이름/사진만 주입.
-function slideCta(lawyer, ctaH1, ctaH1Em, bgUri, kind) {
+// (선택) 판결문/증거 카드 — 연락처 카드 바로 앞. v={uri, kind:"doc"|"ai"}.
+//  doc: 첨부한 실제 판결문을 문서처럼 액자에 담아 보여준다.
+//  ai : 판결문이 없어 내용에 어울리는 이미지를 생성한 경우(선명한 이미지 + 하단 그라데이션).
+function slideVerdict(v, pageNum) {
+  const uri = String(v.uri || "").replace(/"/g, "&quot;");
+  if (v.kind === "ai") {
+    return `
+  <section class="slide cover verdict-ai" data-n="${String(pageNum).padStart(2, "0")}">
+    ${bg(10, v.uri, "src")}
+    <div class="inner">
+      ${top(pageNum)}
+      <div class="body-area">
+        <div class="realcase">실제 성공사례</div>
+        <h1 class="sm">${headline("실제 판결로\n확인된 결과예요", "확인된")}</h1>
+      </div>
+    </div>
+  </section>`;
+  }
+  return `
+  <section class="slide verdict" data-n="${String(pageNum).padStart(2, "0")}">
+    <div class="vbg"></div>
+    <div class="inner">
+      ${top(pageNum)}
+      <div class="realcase">실제 판결문</div>
+      <div class="vframe"><img class="vshot" alt="판결문" src="${uri}" /></div>
+      <p class="vcap">본 사건의 실제 법원 판결문이에요.</p>
+    </div>
+  </section>`;
+}
+
+// 마지막: 상담 안내 — 고정. 검토 변호사 이름/사진만 주입.
+function slideCta(lawyer, ctaH1, ctaH1Em, bgUri, kind, pageNum) {
   const img = lawyerImageDataUri(lawyer);
   const h1 = ctaH1 || "혼자 감당하지 말고\n먼저 물어보세요";
   const em = ctaH1Em || "먼저";
@@ -406,10 +449,10 @@ function slideCta(lawyer, ctaH1, ctaH1Em, bgUri, kind) {
   const logo = logoDataUri();
   const brandMark = logo ? `<img class="meta-logo" alt="${esc(BRAND)}" src="${logo}" />` : esc(BRAND);
   return `
-  <section class="slide cta" data-n="10">
+  <section class="slide cta" data-n="${String(pageNum).padStart(2, "0")}">
     ${bg(10, bgUri, kind)}
     <div class="inner">
-      ${top(10)}
+      ${top(pageNum)}
       <div class="lawyer">
         <img alt="${esc(lawyer)} 변호사" src="${img}" />
         <div class="meta">
@@ -438,8 +481,10 @@ function slideCta(lawyer, ctaH1, ctaH1Em, bgUri, kind) {
  */
 export function buildHtml(d) {
   const B = d.bg || {}; // { 1: dataUri, ... } — 배경 이미지(선택). 없으면 CSS 메쉬.
-  const K = d.bgKind || "ai"; // "src"=원문 사진(강한 블러) | "ai"=AI 생성
-  const slides = [
+  const K = d.bgKind || "ai"; // "src"=원문 사진 | "ai"=AI 생성
+  const hasV = d.verdict && d.verdict.uri; // 판결문/증거 카드(선택)
+  _total = hasV ? 11 : 10; // 페이지 번호 분모(top)
+  const list = [
     slideCover(d, B[1], K),
     slideText(2, d.s2, "여온의 이야기 · 성공사례", B[2], K),
     slideText(3, d.s3, "문제 정의", B[3], K),
@@ -449,8 +494,21 @@ export function buildHtml(d) {
     slideCards(d.s7, B[7], K),
     slideText(8, d.s8, "가장 중요한 문장", B[8], K),
     slideChecklist(d.s9, B[9], K),
-    slideCta(d.lawyer, d.cta_h1, d.cta_h1_em, B[10], K),
-  ].join("\n");
+  ];
+  let pg = 10;
+  if (hasV) {
+    list.push(slideVerdict(d.verdict, 10));
+    pg = 11;
+  }
+  list.push(slideCta(d.lawyer, d.cta_h1, d.cta_h1_em, B[10], K, pg));
+  const slides = list.join("\n");
+
+  // 편집에서 고른 로고 크기(px) 반영. 없으면 기본(REFINE 64px).
+  const logoH = Number(d.style && d.style.logo);
+  const styleCss =
+    Number.isFinite(logoH) && logoH >= 30 && logoH <= 160
+      ? `.top .logo{height:${Math.round(logoH)}px;max-width:${Math.round(logoH * 7)}px}`
+      : "";
 
   return `<!DOCTYPE html>
 <html lang="ko">
@@ -460,7 +518,8 @@ export function buildHtml(d) {
 <title>${BRAND} 카드뉴스 — ${esc(d.category || "")}</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
 <style>${styleBlock()}
-${REFINE}</style>
+${REFINE}
+${styleCss}</style>
 </head>
 <body>
 <div class="stage" id="stage">
