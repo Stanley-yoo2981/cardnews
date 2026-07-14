@@ -103,12 +103,14 @@ async function fetchOne(url, referer) {
  * @returns {Promise<string[]>} data URI 배열
  */
 export async function fetchImages(urls, opts = {}) {
-  const cap = Math.max(1, Math.min(8, opts.cap || 4));
+  const cap = Math.max(1, Math.min(12, opts.cap || 10));
+  // 실패에 대비해 여유분까지 '병렬'로 받는다(순차보다 훨씬 빠름). 순서는 유지.
+  const tryList = urls.slice(0, cap + 6);
+  const results = await Promise.all(tryList.map((u) => fetchOne(u, opts.referer)));
   const out = [];
-  for (const u of urls) {
-    if (out.length >= cap) break;
-    const uri = await fetchOne(u, opts.referer);
+  for (const uri of results) {
     if (uri) out.push(uri);
+    if (out.length >= cap) break;
   }
   return out;
 }
@@ -124,9 +126,11 @@ export async function fetchImages(urls, opts = {}) {
 export async function backgroundsFromSource(html, baseUrl, opts = {}) {
   const urls = extractImages(html, baseUrl);
   if (!urls.length) return {};
-  const imgs = await fetchImages(urls, { cap: opts.cap || 4, referer: baseUrl });
+  const imgs = await fetchImages(urls, { cap: opts.cap || 10, referer: baseUrl });
   if (!imgs.length) return {};
+  // 슬라이드마다 '서로 다른' 이미지 1장씩(중복 금지). 이미지가 모자란 칸은
+  // 배정하지 않아 build.mjs 가 CSS 배경으로 채운다(같은 이미지 반복 방지).
   const map = {};
-  for (let n = 1; n <= 10; n++) map[n] = imgs[(n - 1) % imgs.length];
+  for (let n = 1; n <= 10 && n <= imgs.length; n++) map[n] = imgs[n - 1];
   return map;
 }

@@ -267,7 +267,7 @@ export async function runPipeline(input) {
   //  1) 원문 URL 에 삽입된 실제 이미지  2) AI 생성 배경  3) CSS 메쉬(폴백)
   if (articleHtml && urlForRecord) {
     try {
-      const bg = await backgroundsFromSource(articleHtml, urlForRecord, { cap: 4 });
+      const bg = await backgroundsFromSource(articleHtml, urlForRecord, { cap: 10 });
       if (Object.keys(bg).length) {
         data.bg = bg;
         data.bgKind = "src";
