@@ -115,6 +115,18 @@ export function applyEditablePatch(data, patch) {
   return data;
 }
 
+// index.html 을 쓰고 compliance 만 검사한다(렌더 없이). 재생성 판단용.
+async function buildAndCheck(dir, data) {
+  const indexPath = path.join(dir, "index.html");
+  fs.writeFileSync(indexPath, buildHtml(data));
+  try {
+    await execFileP("node", ["scripts/compliance.mjs", indexPath], { cwd: ROOT });
+    return { ok: true, out: "" };
+  } catch (e) {
+    return { ok: false, out: ((e.stdout || "") + (e.stderr || "")).trim() };
+  }
+}
+
 // 슬라이드 데이터 → index.html + compliance 게이트 + PNG 10장 + caption.txt + data.json.
 // 최초 생성과 편집(재렌더)에서 공통으로 쓴다. compliance 실패 시 렌더로 넘어가지 않는다.
 export async function renderDraft(dir, data) {
@@ -220,21 +232,35 @@ export async function runPipeline(input) {
     throw new Error("알 수 없는 소스 유형입니다.");
   }
 
-  // 생성
+  // 생성 + 컴플라이언스(금칙어 등). 실패하면 사유를 피드백해 최대 1회 자동 재생성한다.
   const lawyerHint = extractLawyer(articleText);
-  const data = await generateSlides(articleText, { lawyerHint });
+  const dir = draftDir(dateStr, id);
+  let data;
+  let lastErr = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    data = await generateSlides(articleText, { lawyerHint, retryReason: lastErr });
+    const chk = await buildAndCheck(dir, data); // 배경 없이 문안만 검사(배경은 검사에 영향 없음)
+    if (chk.ok) {
+      lastErr = null;
+      break;
+    }
+    lastErr = chk.out;
+    console.error(`[compliance] ${attempt}차 실패, 재생성 시도:`, chk.out.replace(/\s+/g, " ").slice(0, 160));
+    if (attempt === 2) {
+      const err = new Error("컴플라이언스 검사 실패로 초안을 폐기했습니다.\n" + chk.out);
+      err.code = "COMPLIANCE_FAILED";
+      throw err;
+    }
+  }
 
-  // 배경 이미지. 우선순위:
-  //  1) 원문 URL 에 삽입된 실제 이미지(블러 처리해 배경으로) — 현실감 있는 결과
-  //  2) AI 생성 배경(CARDNEWS_IMAGES=on 일 때)
-  //  3) 둘 다 없으면 CSS 추상 메쉬(build.mjs 폴백)
-  // 어느 단계든 실패하면 다음 폴백으로 넘어가며, 최종적으로는 항상 렌더된다.
+  // 배경 이미지(텍스트 확정 후). 우선순위:
+  //  1) 원문 URL 에 삽입된 실제 이미지  2) AI 생성 배경  3) CSS 메쉬(폴백)
   if (articleHtml && urlForRecord) {
     try {
       const bg = await backgroundsFromSource(articleHtml, urlForRecord, { cap: 4 });
       if (Object.keys(bg).length) {
         data.bg = bg;
-        data.bgKind = "src"; // build.mjs 가 원문 사진에 더 강한 블러를 준다
+        data.bgKind = "src";
       }
     } catch (e) {
       console.error("[srcimg] 원문 이미지 배경 건너뜀:", e.message);
@@ -249,8 +275,7 @@ export async function runPipeline(input) {
     }
   }
 
-  // 빌드 → compliance → 렌더 → caption/data.json (편집 시에도 재사용하는 공통 경로)
-  const dir = draftDir(dateStr, id);
+  // 최종 빌드 → compliance(재확인) → 렌더 → caption/data.json
   await renderDraft(dir, data);
 
   // review.md (근거 매핑) — 최초 생성 때만 만든다.
