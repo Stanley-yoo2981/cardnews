@@ -7,7 +7,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-import { generateSlides, extractLawyer } from "./generate.mjs";
+import { generateSlides, extractLawyer, LAWYERS } from "./generate.mjs";
 import { buildHtml } from "./build.mjs";
 import * as image from "./image.mjs";
 import { backgroundsFromSource } from "./srcimg.mjs";
@@ -72,21 +72,6 @@ function draftDir(dateStr, id) {
   return dir;
 }
 
-// 검수함 썸네일: 원문 대표 이미지(블러 없는 원본)를 파일로 저장한다.
-// data.bg[1] 은 og:image(대표 이미지)를 앞세운 첫 원문 사진. 없으면 null.
-function saveThumb(dir, dataUri) {
-  const m = /^data:(image\/[a-z0-9.+-]+);base64,(.+)$/is.exec(String(dataUri || ""));
-  if (!m) return null;
-  const ext = m[1].split("/")[1].toLowerCase().replace("jpeg", "jpg").replace(/[^a-z0-9]/g, "") || "jpg";
-  const name = `thumb.${ext}`;
-  try {
-    fs.writeFileSync(path.join(dir, name), Buffer.from(m[2], "base64"));
-    return name;
-  } catch {
-    return null;
-  }
-}
-
 function writeCaption(dir, data) {
   const tags = Array.isArray(data.hashtags) ? data.hashtags.slice(0, 8) : [];
   const body =
@@ -109,6 +94,36 @@ export function applyEditablePatch(data, patch) {
   const str = (v) => String(v ?? "");
   for (const k of EDIT_TEXT) if (k in patch) data[k] = str(patch[k]);
   if (Array.isArray(patch.hashtags)) data.hashtags = patch.hashtags.map(str).slice(0, 8);
+  // 검토 변호사 변경(4인 중에서만). 사람이 확정하면 '자동 기본값' 표시를 해제한다.
+  if (LAWYERS.includes(patch.lawyer)) {
+    data.lawyer = patch.lawyer;
+    data.lawyerAuto = false;
+  }
+
+  // 스타일(현재는 로고 크기). "" 이면 기본값으로 되돌린다.
+  if (patch.style && typeof patch.style === "object") {
+    data.style = data.style || {};
+    if ("logo" in patch.style) {
+      const lg = Number(patch.style.logo);
+      if (Number.isFinite(lg) && lg >= 30 && lg <= 160) data.style.logo = Math.round(lg);
+      else delete data.style.logo;
+    }
+    if ("textScale" in patch.style) {
+      const ts = Number(patch.style.textScale);
+      if (Number.isFinite(ts) && ts >= 0.8 && ts <= 1.4) data.style.textScale = ts;
+      else delete data.style.textScale;
+    }
+    // 카드별 글자 크기(cover, s2..s9, verdict, cta). 0.6~1.8 배, "" 이면 해제.
+    if (patch.style.slideScale && typeof patch.style.slideScale === "object") {
+      data.style.slideScale = data.style.slideScale || {};
+      for (const k of ["cover", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "verdict", "cta"]) {
+        if (!(k in patch.style.slideScale)) continue;
+        const v = Number(patch.style.slideScale[k]);
+        if (Number.isFinite(v) && v >= 0.6 && v <= 1.8) data.style.slideScale[k] = v;
+        else delete data.style.slideScale[k];
+      }
+    }
+  }
 
   for (const s of EDIT_SLIDES) {
     const p = patch[s];
@@ -128,6 +143,18 @@ export function applyEditablePatch(data, patch) {
     if (Array.isArray(p.checks)) data[s].checks = p.checks.map(str).filter(Boolean).slice(0, 4);
   }
   return data;
+}
+
+// index.html 을 쓰고 compliance 만 검사한다(렌더 없이). 재생성 판단용.
+async function buildAndCheck(dir, data) {
+  const indexPath = path.join(dir, "index.html");
+  fs.writeFileSync(indexPath, buildHtml(data));
+  try {
+    await execFileP("node", ["scripts/compliance.mjs", indexPath], { cwd: ROOT });
+    return { ok: true, out: "" };
+  } catch (e) {
+    return { ok: false, out: ((e.stdout || "") + (e.stderr || "")).trim() };
+  }
 }
 
 // 슬라이드 데이터 → index.html + compliance 게이트 + PNG 10장 + caption.txt + data.json.
@@ -235,37 +262,71 @@ export async function runPipeline(input) {
     throw new Error("알 수 없는 소스 유형입니다.");
   }
 
-  // 생성
+  // 생성 + 컴플라이언스(금칙어 등). 실패하면 사유를 피드백해 최대 1회 자동 재생성한다.
   const lawyerHint = extractLawyer(articleText);
-  const data = await generateSlides(articleText, { lawyerHint });
+  const dir = draftDir(dateStr, id);
+  let data;
+  let lastErr = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    data = await generateSlides(articleText, { lawyerHint, retryReason: lastErr, lawyerOverride: input.lawyer });
+    const chk = await buildAndCheck(dir, data); // 배경 없이 문안만 검사(배경은 검사에 영향 없음)
+    if (chk.ok) {
+      lastErr = null;
+      break;
+    }
+    lastErr = chk.out;
+    console.error(`[compliance] ${attempt}차 실패, 재생성 시도:`, chk.out.replace(/\s+/g, " ").slice(0, 160));
+    if (attempt === 2) {
+      const err = new Error("컴플라이언스 검사 실패로 초안을 폐기했습니다.\n" + chk.out);
+      err.code = "COMPLIANCE_FAILED";
+      throw err;
+    }
+  }
 
-  // 배경 이미지. 우선순위:
-  //  1) 원문 URL 에 삽입된 실제 이미지(블러 처리해 배경으로) — 현실감 있는 결과
-  //  2) AI 생성 배경(CARDNEWS_IMAGES=on 일 때)
-  //  3) 둘 다 없으면 CSS 추상 메쉬(build.mjs 폴백)
-  // 어느 단계든 실패하면 다음 폴백으로 넘어가며, 최종적으로는 항상 렌더된다.
+  // 배경(텍스트 확정 후): 슬라이드마다 서로 다른 이미지 1장씩.
+  //  1) 원문 사진(문서=판결문 제외, 중복 없음)  2) 빈 칸은 AI 이미지로 채움  3) 그래도 없으면 CSS 메쉬
+  const bg = {};
   if (articleHtml && urlForRecord) {
     try {
-      const bg = await backgroundsFromSource(articleHtml, urlForRecord, { cap: 4 });
-      if (Object.keys(bg).length) {
-        data.bg = bg;
-        data.bgKind = "src"; // build.mjs 가 원문 사진에 더 강한 블러를 준다
-      }
+      Object.assign(bg, await backgroundsFromSource(articleHtml, urlForRecord, { cap: 10 }));
     } catch (e) {
       console.error("[srcimg] 원문 이미지 배경 건너뜀:", e.message);
     }
   }
-  if (!data.bg && image.isEnabled()) {
-    try {
-      data.bg = await image.generateBackgrounds(data);
-      data.bgKind = "ai";
-    } catch (e) {
-      console.error("[image] 배경 생성 건너뜀:", e.message);
+  // 빈 칸을 AI 이미지로 채운다(OPENAI_API_KEY 있을 때, CARDNEWS_FILL=off 로 끌 수 있음).
+  if (image.canGenerate() && process.env.CARDNEWS_FILL !== "off") {
+    const need = [];
+    for (let n = 1; n <= 10; n++) if (!bg[n]) need.push(n);
+    if (need.length) {
+      const kick = { 2: data.s2, 3: data.s3, 4: data.s4, 5: data.s5, 6: data.s6, 7: data.s7, 8: data.s8, 9: data.s9 };
+      const themeFor = (n) => (n === 1 || n === 10 ? data.category : (kick[n] && kick[n].kicker) || data.category) || "법률";
+      try {
+        let logged = false;
+        const gen = await Promise.all(
+          need.map((n) =>
+            image.generateImage(image.backgroundPrompt(themeFor(n))).catch((e) => {
+              if (!logged) {
+                console.error("[image] 배경 생성 실패(사유):", e.message);
+                logged = true;
+              }
+              return null;
+            })
+          )
+        );
+        need.forEach((n, i) => {
+          if (gen[i]) bg[n] = gen[i];
+        });
+      } catch (e) {
+        console.error("[image] AI 빈칸 채움 실패:", e.message);
+      }
     }
   }
+  if (Object.keys(bg).length) {
+    data.bg = bg;
+    data.bgKind = "src"; // 원문·AI 모두 '선명 + 하단 그라데이션' 처리
+  }
 
-  // 빌드 → compliance → 렌더 → caption/data.json (편집 시에도 재사용하는 공통 경로)
-  const dir = draftDir(dateStr, id);
+  // 최종 빌드 → compliance(재확인) → 렌더 → caption/data.json
   await renderDraft(dir, data);
 
   // review.md (근거 매핑) — 최초 생성 때만 만든다.
@@ -275,27 +336,22 @@ export async function runPipeline(input) {
   // relDir 는 DATA_DIR 기준 상대경로("drafts/<name>") → URL(/drafts/...)과 일치.
   const relDir = path.relative(DATA_DIR, dir).split(path.sep).join("/");
 
-  // 검수함 썸네일(블러 없는 원문 대표 이미지). 원문 사진이 있을 때만.
-  let thumb = null;
-  if (data.bgKind === "src" && data.bg && data.bg[1]) {
-    const tn = saveThumb(dir, data.bg[1]);
-    if (tn) thumb = `${relDir}/${tn}`;
-  }
-
+  const cardCount = data.verdict && data.verdict.uri ? 11 : 10;
   markUsed({
     key,
     url: urlForRecord,
     title,
     category: data.category || title,
     lawyer: data.lawyer,
+    lawyerAuto: Boolean(data.lawyerAuto),
     dir: relDir,
-    thumb,
+    cardCount,
   });
 
   // 드라이브 영구 백업(설정된 경우). 실패해도 초안은 이미 만들어졌으므로 계속 진행.
   await persist.backupDraft(relDir);
 
-  const cards = Array.from({ length: 10 }, (_, i) => `${relDir}/card_${String(i + 1).padStart(2, "0")}.png`);
+  const cards = Array.from({ length: cardCount }, (_, i) => `${relDir}/card_${String(i + 1).padStart(2, "0")}.png`);
   return {
     dir,
     relDir,
