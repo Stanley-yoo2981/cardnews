@@ -22,16 +22,12 @@ export function isOn() {
 const absOf = (relDir) => path.resolve(DATA_DIR, relDir);
 const folderNameOf = (relDir) => String(relDir).split("/").pop(); // 초안 dir basename
 
-// 드라이브에 올리지 않을 파일(내부 미리보기용). index.html 은 data.json 으로 재생성되므로 제외.
-const SKIP_UPLOAD = new Set(["index.html"]);
-
-// 초안 폴더를 드라이브에 백업 — 카드 PNG·썸네일·caption·review + 편집복원용 data.json.
+// 초안 폴더 전체(이미지·썸네일·caption/review/index/data.json)를 드라이브에 백업.
 export async function archiveDraft(relDir) {
   if (!isOn()) return null;
   const abs = absOf(relDir);
   const files = fs.existsSync(abs)
     ? fs.readdirSync(abs).filter((f) => {
-        if (SKIP_UPLOAD.has(f)) return false;
         try {
           return fs.statSync(path.join(abs, f)).isFile();
         } catch {

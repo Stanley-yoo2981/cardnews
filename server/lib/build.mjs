@@ -70,31 +70,13 @@ function lawyerImageDataUri(name) {
 
 // 법무법인 여온 로고(가로·화이트). assets/lawyers/ 에 있으면 카드 우측 상단에 넣는다.
 // 파일이 아직 없으면 null → top() 이 텍스트 브랜드로 폴백한다.
-const LOGO_FILE = "logo-w.png";
+const LOGO_FILE = "법무법인여온logo-w_가로.png";
 let _logoUri; // 캐시(undefined=미확인, null=없음, string=데이터URI)
-// 로고 파일 찾기 — 맥(NFD)·윈도(NFC) 한글 파일명 차이를 흡수하고, 'logo' 포함 파일로도 폴백.
-function findLogoFile(dir) {
-  if (fs.existsSync(path.join(dir, LOGO_FILE))) return LOGO_FILE;
-  let files;
-  try {
-    files = fs.readdirSync(dir);
-  } catch {
-    return null;
-  }
-  const target = LOGO_FILE.normalize("NFC");
-  return (
-    files.find((f) => f.normalize("NFC") === target) ||
-    files.find((f) => /logo/i.test(f.normalize("NFC"))) ||
-    null
-  );
-}
 function logoDataUri() {
   if (_logoUri !== undefined) return _logoUri;
-  _logoUri = null;
   try {
-    const dir = path.join(ROOT, "assets", "lawyers");
-    const file = findLogoFile(dir);
-    if (file) _logoUri = `data:image/png;base64,${fs.readFileSync(path.join(dir, file)).toString("base64")}`;
+    const p = path.join(ROOT, "assets", "lawyers", LOGO_FILE);
+    _logoUri = `data:image/png;base64,${fs.readFileSync(p).toString("base64")}`;
   } catch {
     _logoUri = null;
   }
@@ -135,16 +117,14 @@ function bg(seed = 0, uri = null, kind = "ai") {
   return `<div class="bg"></div><div class="mesh">${mesh}</div><div class="grain"></div><div class="scrim"></div>`;
 }
 
-let _total = 10; // 총 카드 수(판결문 카드가 있으면 11). buildHtml 이 매번 설정한다.
 function top(n) {
   const pg = String(n).padStart(2, "0");
-  const tot = String(_total).padStart(2, "0");
   const logo = logoDataUri();
-  // 로고가 있으면: 좌측 상단 로고 · 우측 페이지번호. 없으면 기존 텍스트 브랜드.
+  // 로고가 있으면: 좌측 페이지번호 · 우측 상단 로고. 없으면 기존 텍스트 브랜드.
   if (logo) {
-    return `<div class="top"><img class="logo" alt="${BRAND}" src="${logo}" /><div class="pg">${pg} / ${tot}</div></div>`;
+    return `<div class="top"><div class="pg">${pg} / 10</div><img class="logo" alt="${BRAND}" src="${logo}" /></div>`;
   }
-  return `<div class="top"><div class="brand"><div class="dot"></div><span>${BRAND}</span></div><div class="pg">${pg} / ${tot}</div></div>`;
+  return `<div class="top"><div class="brand"><div class="dot"></div><span>${BRAND}</span></div><div class="pg">${pg} / 10</div></div>`;
 }
 
 // h1 크기 클래스: 가장 긴 줄 기준으로 자동 축소해 넘침을 막는다(PRO 일관성).
@@ -188,30 +168,10 @@ h1 .u{background:linear-gradient(transparent 60%,rgba(242,205,115,.4) 60%)}
 .num{color:rgba(200,165,96,.24)}
 .pg,.foot .swipe{color:var(--gold-hot)}
 
-/* 좌측 상단 로고(가로·화이트). 기본 크게, 편집에서 조절 가능(아래 인라인 override). */
+/* 우측 상단 로고(가로·화이트) */
 .top{align-items:flex-start}
-.top .logo{height:64px;width:auto;max-width:440px;object-fit:contain;display:block;
-  filter:drop-shadow(0 2px 12px rgba(0,0,0,.45))}
-
-/* 표지 '실제 성공사례' 배지 — 시선을 끄는 솔리드 태그 */
-.cover .realcase{align-self:flex-start;font-size:22px;font-weight:800;letter-spacing:.01em;
-  color:#0A101C;background:var(--gold-hot);padding:9px 18px;border-radius:8px;margin-bottom:18px;
-  box-shadow:0 6px 20px rgba(0,0,0,.35)}
-
-/* 상담 슬라이드 로고(‘법무법인 여온’ 표기 대체) */
-.lawyer .meta small .meta-logo{height:26px;width:auto;max-width:250px;display:block;margin:0 0 6px;
-  filter:drop-shadow(0 1px 6px rgba(0,0,0,.35))}
-
-/* 판결문 카드(첨부한 실제 판결문을 문서처럼 보여준다) */
-.slide.verdict{background:#0b1220}
-.slide.verdict .vbg{position:absolute;inset:0;z-index:0;background:radial-gradient(120% 90% at 50% 0%,#1a3556 0%,#0A101C 68%)}
-.slide.verdict .inner{z-index:4}
-.slide.verdict .realcase{align-self:flex-start;font-size:22px;font-weight:800;color:#0A101C;
-  background:var(--gold-hot);padding:9px 18px;border-radius:8px;margin:6px 0 4px;box-shadow:0 6px 20px rgba(0,0,0,.35)}
-.slide.verdict .vframe{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;
-  margin:26px 0 20px;background:#fff;border-radius:14px;padding:20px;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.55)}
-.slide.verdict .vshot{max-width:100%;max-height:100%;object-fit:contain;border-radius:4px}
-.slide.verdict .vcap{font-size:28px;color:rgba(246,243,237,.82);text-align:center;padding-bottom:6px}
+.top .logo{height:50px;width:auto;max-width:340px;object-fit:contain;display:block;
+  filter:drop-shadow(0 2px 10px rgba(0,0,0,.35))}
 
 /* 하단 강조 바 — 더 굵고 선명하게. */
 .bar{height:3px;border-radius:3px;
@@ -226,85 +186,18 @@ h1 .u{background:linear-gradient(transparent 60%,rgba(242,205,115,.4) 60%)}
 .sub.tight{font-size:33px;line-height:1.55}
 .card p small{color:rgba(246,243,237,.66)}
 
-/* 원문 사진 배경: 블러 없이 선명하게. 가독성은 아래 하단 그라데이션이 확보한다. */
-.slide .bg.src{filter:brightness(.92) contrast(1.02);inset:0;transform:none}
+/* 원문 사진을 배경으로 쓸 때: 형체가 보일 정도의 은은한 블러(가독성은 scrim 이 확보). */
+.slide .bg.src{filter:blur(8px) saturate(.95) brightness(.52);inset:-8%;transform:scale(1.08)}
 
-/* 하단부터 검정이 짙어지는 그라데이션(뉴스카드 스타일):
-   위쪽은 이미지가 선명히 보이고, 아래로 갈수록 어두워져 흰 글자가 읽힌다. */
-.slide .scrim{background:linear-gradient(to bottom,
-  rgba(6,10,18,.5) 0%, rgba(6,10,18,.14) 11%, rgba(6,10,18,0) 32%,
-  rgba(6,10,18,.34) 54%, rgba(6,10,18,.72) 74%, rgba(6,10,18,.9) 88%, rgba(6,10,18,.98) 100%)}
-
-/* 선명한 이미지 위 가독성 — 텍스트 그림자 보강 + 표지 텍스트 하단 배치 */
-h1{text-shadow:0 2px 20px rgba(0,0,0,.55),0 1px 2px rgba(0,0,0,.5)}
-.sub{text-shadow:0 1px 12px rgba(0,0,0,.55)}
-.foot .tag,.foot .swipe,.cover .quote{text-shadow:0 1px 8px rgba(0,0,0,.5)}
-.cover .body-area{justify-content:flex-end}
-
-/* 전체 글자 크기 배율(편집에서 조절). buildHtml 이 :root{--ts} 를 주입한다. */
-:root{--ts:1}
-h1{font-size:calc(100px*var(--ts))}
-h1.sm{font-size:calc(82px*var(--ts))}
-h1.xs{font-size:calc(70px*var(--ts))}
-h1.xxs{font-size:calc(60px*var(--ts))}
-.cover h1{font-size:calc(112px*var(--ts))}
-.cover h1.sm{font-size:calc(96px*var(--ts))}
-.cover h1.xs{font-size:calc(82px*var(--ts))}
-.cover h1.xxs{font-size:calc(70px*var(--ts))}
-.sub{font-size:calc(38px*var(--ts))}
-.sub.small{font-size:calc(34px*var(--ts))}
-.sub.tight{font-size:calc(33px*var(--ts))}
-.kicker{font-size:calc(24px*var(--ts))}
-.card p{font-size:calc(34px*var(--ts))}
-.card p small{font-size:calc(26px*var(--ts))}
-.stats span{font-size:calc(22px*var(--ts))}
-.stats strong{font-size:calc(40px*var(--ts))}
-.vs div{font-size:calc(34px*var(--ts))}
-.cover .quote{font-size:calc(36px*var(--ts))}
+/* 배경 그라데이션을 더 깊게 — 텍스트 대비 확보. */
+.slide .scrim{background:
+  linear-gradient(180deg,rgba(9,14,25,.82) 0%,rgba(9,14,25,.46) 32%,rgba(9,14,25,.7) 66%,rgba(9,14,25,.96) 100%),
+  radial-gradient(120% 80% at 50% 112%,rgba(9,14,25,.92),transparent 60%)}
 `;
 
 function subClass(text) {
   const len = String(text || "").replace(/\n/g, "").length;
   return len >= 78 ? "sub tight" : "sub";
-}
-
-// ── 프리셋 스타일(편집기에서 고른 값) ─────────────────────────────────────
-// 글꼴(전체) · 강조색(전체) · 헤드라인 크기(슬라이드별) · 상하 위치(슬라이드별)
-const FONTS = {
-  sans: { family: "'Pretendard','Apple SD Gothic Neo','Noto Sans KR',sans-serif", link: "" },
-  serif: {
-    family: "'Noto Serif KR',serif",
-    link: '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;800;900&display=swap" />',
-  },
-  gothic: {
-    family: "'Gothic A1','Pretendard',sans-serif",
-    link: '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@500;700;900&display=swap" />',
-  },
-};
-const ACCENTS = { gold: "#F2CD73", teal: "#59D0C4", sky: "#7FB6EE", coral: "#F2937B", white: "#F6F3ED" };
-const SIZE_PX = { small: 64, normal: 84, large: 104, xlarge: 124 };
-
-function styleHead(S) {
-  const font = FONTS[S.font] || FONTS.sans;
-  const accent = ACCENTS[S.accent] || ACCENTS.gold;
-  const css = `.stage{font-family:${font.family}}\n:root{--gold-hot:${accent}}`;
-  return { link: font.link, css };
-}
-
-// 슬라이드별 인라인 스타일(헤드라인 크기 / 본문 상하 위치). 값이 없으면 빈 문자열.
-function slideSty(S, key) {
-  const s = (S && S.slides && S.slides[key]) || {};
-  const px = SIZE_PX[s.size];
-  const h1 = px ? ` style="font-size:${px}px;line-height:1.14"` : "";
-  const area =
-    s.align === "top"
-      ? ` style="justify-content:flex-start"`
-      : s.align === "center"
-      ? ` style="justify-content:center"`
-      : s.align === "bottom"
-      ? ` style="justify-content:flex-end"`
-      : "";
-  return { h1, area };
 }
 
 // --- 각 슬라이드 ---
@@ -315,7 +208,6 @@ function slideCover(d, bgUri, kind) {
     <div class="inner">
       ${top(1)}
       <div class="body-area">
-        <div class="realcase">실제 성공사례</div>
         <div class="kicker">${esc(d.category)}</div>
         <h1 class="${coverClass(d.cover_h1)}">${headline(d.cover_h1, d.cover_h1_em)}</h1>
         ${d.cover_quote ? `<p class="quote">${ml(d.cover_quote)}</p>` : ""}
@@ -431,55 +323,22 @@ function slideChecklist(d, bgUri, kind) {
   </section>`;
 }
 
-// (선택) 판결문/증거 카드 — 연락처 카드 바로 앞. v={uri, kind:"doc"|"ai"}.
-//  doc: 첨부한 실제 판결문을 문서처럼 액자에 담아 보여준다.
-//  ai : 판결문이 없어 내용에 어울리는 이미지를 생성한 경우(선명한 이미지 + 하단 그라데이션).
-function slideVerdict(v, pageNum) {
-  const uri = String(v.uri || "").replace(/"/g, "&quot;");
-  if (v.kind === "ai") {
-    return `
-  <section class="slide cover verdict-ai" data-n="${String(pageNum).padStart(2, "0")}">
-    ${bg(10, v.uri, "src")}
-    <div class="inner">
-      ${top(pageNum)}
-      <div class="body-area">
-        <div class="realcase">실제 성공사례</div>
-        <h1 class="sm">${headline("실제 판결로\n확인된 결과예요", "확인된")}</h1>
-      </div>
-    </div>
-  </section>`;
-  }
-  return `
-  <section class="slide verdict" data-n="${String(pageNum).padStart(2, "0")}">
-    <div class="vbg"></div>
-    <div class="inner">
-      ${top(pageNum)}
-      <div class="realcase">실제 판결문</div>
-      <div class="vframe"><img class="vshot" alt="판결문" src="${uri}" /></div>
-      <p class="vcap">본 사건의 실제 법원 판결문이에요.</p>
-    </div>
-  </section>`;
-}
-
-// 마지막: 상담 안내 — 고정. 검토 변호사 이름/사진만 주입.
-function slideCta(lawyer, ctaH1, ctaH1Em, bgUri, kind, pageNum) {
+// 10장: 상담 안내 — 고정. 검토 변호사 이름/사진만 주입.
+function slideCta(lawyer, ctaH1, ctaH1Em, bgUri, kind) {
   const img = lawyerImageDataUri(lawyer);
   const h1 = ctaH1 || "혼자 감당하지 말고\n먼저 물어보세요";
   const em = ctaH1Em || "먼저";
-  // '법무법인 여온' 표기는 로고가 있으면 로고 이미지로, 없으면 텍스트로.
-  const logo = logoDataUri();
-  const brandMark = logo ? `<img class="meta-logo" alt="${esc(BRAND)}" src="${logo}" />` : esc(BRAND);
   return `
-  <section class="slide cta" data-n="${String(pageNum).padStart(2, "0")}">
+  <section class="slide cta" data-n="10">
     ${bg(10, bgUri, kind)}
     <div class="inner">
-      ${top(pageNum)}
+      ${top(10)}
       <div class="lawyer">
         <img alt="${esc(lawyer)} 변호사" src="${img}" />
         <div class="meta">
           <em>이 사례를 검토한 변호사</em>
           <strong>${esc(lawyer)} 변호사</strong>
-          <small>${brandMark}<br>가사 · 이혼 사건</small>
+          <small>${BRAND}<br>가사 · 이혼 사건</small>
         </div>
       </div>
       <div class="body-area">
@@ -502,10 +361,8 @@ function slideCta(lawyer, ctaH1, ctaH1Em, bgUri, kind, pageNum) {
  */
 export function buildHtml(d) {
   const B = d.bg || {}; // { 1: dataUri, ... } — 배경 이미지(선택). 없으면 CSS 메쉬.
-  const K = d.bgKind || "ai"; // "src"=원문 사진 | "ai"=AI 생성
-  const hasV = d.verdict && d.verdict.uri; // 판결문/증거 카드(선택)
-  _total = hasV ? 11 : 10; // 페이지 번호 분모(top)
-  const list = [
+  const K = d.bgKind || "ai"; // "src"=원문 사진(강한 블러) | "ai"=AI 생성
+  const slides = [
     slideCover(d, B[1], K),
     slideText(2, d.s2, "여온의 이야기 · 성공사례", B[2], K),
     slideText(3, d.s3, "문제 정의", B[3], K),
@@ -515,23 +372,8 @@ export function buildHtml(d) {
     slideCards(d.s7, B[7], K),
     slideText(8, d.s8, "가장 중요한 문장", B[8], K),
     slideChecklist(d.s9, B[9], K),
-  ];
-  let pg = 10;
-  if (hasV) {
-    list.push(slideVerdict(d.verdict, 10));
-    pg = 11;
-  }
-  list.push(slideCta(d.lawyer, d.cta_h1, d.cta_h1_em, B[10], K, pg));
-  const slides = list.join("\n");
-
-  // 편집에서 고른 스타일(로고 크기·전체 글자 크기) 반영.
-  const St = d.style || {};
-  let styleCss = "";
-  const logoH = Number(St.logo);
-  if (Number.isFinite(logoH) && logoH >= 30 && logoH <= 160)
-    styleCss += `.top .logo{height:${Math.round(logoH)}px;max-width:${Math.round(logoH * 7)}px}`;
-  const ts = Number(St.textScale);
-  if (Number.isFinite(ts) && ts >= 0.8 && ts <= 1.4) styleCss += `:root{--ts:${ts}}`;
+    slideCta(d.lawyer, d.cta_h1, d.cta_h1_em, B[10], K),
+  ].join("\n");
 
   return `<!DOCTYPE html>
 <html lang="ko">
@@ -541,8 +383,7 @@ export function buildHtml(d) {
 <title>${BRAND} 카드뉴스 — ${esc(d.category || "")}</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
 <style>${styleBlock()}
-${REFINE}
-${styleCss}</style>
+${REFINE}</style>
 </head>
 <body>
 <div class="stage" id="stage">
