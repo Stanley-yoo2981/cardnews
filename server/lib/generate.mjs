@@ -141,6 +141,5 @@ export async function generateSlides(articleText, opts = {}) {
   const found = lawyerHint || override || (LAWYERS.includes(data.lawyer) ? data.lawyer : null);
   data.lawyer = found || DEFAULT_LAWYER;
   data.lawyerAuto = !found;
-  data.lawyer = lawyer;
   return data;
 }
