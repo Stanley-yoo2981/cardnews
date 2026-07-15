@@ -142,8 +142,8 @@ app.post("/api/verdict", async (req, res) => {
       }
       data.verdict = { uri: String(image), kind: "doc" };
     } else if (generate) {
-      if (!process.env.OPENAI_API_KEY) {
-        throw new Error("이미지 생성을 위한 OPENAI_API_KEY가 서버에 설정되어 있지 않습니다.");
+      if (!imageGen.canGenerate()) {
+        throw new Error("이미지 생성 제공자가 없습니다. 무료: IMAGE_PROVIDER=cloudflare(+CF_ACCOUNT_ID/CF_API_TOKEN), 유료: OPENAI_API_KEY.");
       }
       const uri = await imageGen.generateImage(imageGen.backgroundPrompt(data.category || "법률 성공사례"));
       data.verdict = { uri, kind: "ai" };

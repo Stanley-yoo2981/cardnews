@@ -15,6 +15,15 @@ const PROVIDER = process.env.IMAGE_PROVIDER || "openai";
 
 export function isEnabled() {
   if (process.env.CARDNEWS_IMAGES !== "on") return false;
+  return canGenerate();
+}
+
+// 이미지 생성이 가능한 제공자가 설정돼 있는가.
+//  - pollinations: 무료·키 불필요(항상 가능)
+//  - openai: OPENAI_API_KEY 필요(유료)
+export function canGenerate() {
+  if (PROVIDER === "pollinations") return true;
+  if (PROVIDER === "cloudflare") return Boolean(process.env.CF_ACCOUNT_ID && process.env.CF_API_TOKEN);
   if (PROVIDER === "openai") return Boolean(process.env.OPENAI_API_KEY);
   return false;
 }
@@ -54,8 +63,53 @@ export function openaiImageBody(prompt, model, quality) {
   return { model: m, prompt, size: "1024x1536", quality: ["low", "medium", "high"].includes(q) ? q : "low", n: 1 };
 }
 
-// 단일 이미지 생성 → base64 data URI. (OpenAI)
+// 무료 이미지 생성(Pollinations.ai) → base64 data URI. 키·결제 불필요.
+// 매번 다른 seed 로 서로 다른 이미지를 받는다(반복 방지). 느리거나 실패하면 예외.
+async function pollinationsImage(prompt) {
+  const p = encodeURIComponent(String(prompt).replace(/\s+/g, " ").trim().slice(0, 700));
+  const seed = Math.floor(Math.random() * 1e7);
+  const url = `https://image.pollinations.ai/prompt/${p}?width=1024&height=1536&nologo=true&model=flux&seed=${seed}`;
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 50000);
+  try {
+    const res = await fetch(url, { signal: ctl.signal, headers: { "User-Agent": "Mozilla/5.0" } });
+    if (!res.ok) throw new Error(`pollinations HTTP ${res.status}`);
+    const ct = (res.headers.get("content-type") || "image/jpeg").split(";")[0].trim();
+    if (!ct.startsWith("image/")) throw new Error("pollinations 응답이 이미지가 아님");
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length < 1500) throw new Error("pollinations 이미지가 비어 있음");
+    return `data:${ct};base64,${buf.toString("base64")}`;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// 무료 이미지 생성(Cloudflare Workers AI) → base64 data URI.
+// 무료 티어(하루 1만 뉴런)로 Flux 등 사용. CF_ACCOUNT_ID + CF_API_TOKEN 필요.
+async function cloudflareImage(prompt) {
+  const acct = process.env.CF_ACCOUNT_ID;
+  const token = process.env.CF_API_TOKEN;
+  const model = process.env.IMAGE_MODEL_CF || "@cf/black-forest-labs/flux-1-schnell";
+  const url = `https://api.cloudflare.com/client/v4/accounts/${acct}/ai/run/${model}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt: String(prompt).slice(0, 2000), steps: 6 }),
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(`cloudflare HTTP ${res.status} ${t.slice(0, 200)}`);
+  }
+  const json = await res.json();
+  const b64 = json && json.result && json.result.image;
+  if (!b64) throw new Error("cloudflare 응답에 이미지 없음");
+  return `data:image/jpeg;base64,${b64}`;
+}
+
+// 단일 이미지 생성 → base64 data URI.
 export async function generateImage(prompt) {
+  if (PROVIDER === "pollinations") return pollinationsImage(prompt);
+  if (PROVIDER === "cloudflare") return cloudflareImage(prompt);
   if (PROVIDER !== "openai") throw new Error(`지원하지 않는 이미지 제공자: ${PROVIDER}`);
   const model = process.env.IMAGE_MODEL || "gpt-image-1";
   const body = openaiImageBody(prompt, model, process.env.IMAGE_QUALITY);

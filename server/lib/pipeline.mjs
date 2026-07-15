@@ -279,15 +279,24 @@ export async function runPipeline(input) {
     }
   }
   // 빈 칸을 AI 이미지로 채운다(OPENAI_API_KEY 있을 때, CARDNEWS_FILL=off 로 끌 수 있음).
-  if (process.env.OPENAI_API_KEY && process.env.CARDNEWS_FILL !== "off") {
+  if (image.canGenerate() && process.env.CARDNEWS_FILL !== "off") {
     const need = [];
     for (let n = 1; n <= 10; n++) if (!bg[n]) need.push(n);
     if (need.length) {
       const kick = { 2: data.s2, 3: data.s3, 4: data.s4, 5: data.s5, 6: data.s6, 7: data.s7, 8: data.s8, 9: data.s9 };
       const themeFor = (n) => (n === 1 || n === 10 ? data.category : (kick[n] && kick[n].kicker) || data.category) || "법률";
       try {
+        let logged = false;
         const gen = await Promise.all(
-          need.map((n) => image.generateImage(image.backgroundPrompt(themeFor(n))).catch(() => null))
+          need.map((n) =>
+            image.generateImage(image.backgroundPrompt(themeFor(n))).catch((e) => {
+              if (!logged) {
+                console.error("[image] 배경 생성 실패(사유):", e.message);
+                logged = true;
+              }
+              return null;
+            })
+          )
         );
         need.forEach((n, i) => {
           if (gen[i]) bg[n] = gen[i];
