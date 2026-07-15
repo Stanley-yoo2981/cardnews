@@ -103,6 +103,11 @@ export function applyEditablePatch(data, patch) {
       if (Number.isFinite(lg) && lg >= 30 && lg <= 160) data.style.logo = Math.round(lg);
       else delete data.style.logo;
     }
+    if ("textScale" in patch.style) {
+      const ts = Number(patch.style.textScale);
+      if (Number.isFinite(ts) && ts >= 0.8 && ts <= 1.4) data.style.textScale = ts;
+      else delete data.style.textScale;
+    }
   }
 
   for (const s of EDIT_SLIDES) {

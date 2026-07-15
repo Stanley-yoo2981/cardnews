@@ -414,7 +414,16 @@ function buildEditorForm(data){
   [["","기본(보통)"],["48","작게"],["64","보통"],["88","크게"],["112","아주 크게"],["136","최대"]].forEach(([v,l])=>{
     const o=document.createElement("option");o.value=v;o.textContent=l;dsel.appendChild(o);});
   dsel.value=(data.style&&data.style.logo)?String(data.style.logo):"";
-  df.appendChild(dsel);dsec.appendChild(df);body.appendChild(dsec);
+  df.appendChild(dsel);dsec.appendChild(df);
+  // 전체 글자 크기
+  const tf=document.createElement("div");tf.className="efield";
+  const tl=document.createElement("label");tl.textContent="전체 글자 크기";tf.appendChild(tl);
+  const tsel=document.createElement("select");tsel.dataset.styleTs="1";
+  [["","기본(보통)"],["0.9","작게"],["1","보통"],["1.1","크게"],["1.25","아주 크게"],["1.4","최대"]].forEach(([v,l])=>{
+    const o=document.createElement("option");o.value=v;o.textContent=l;tsel.appendChild(o);});
+  tsel.value=(data.style&&data.style.textScale)?String(data.style.textScale):"";
+  tf.appendChild(tsel);dsec.appendChild(tf);
+  body.appendChild(dsec);
   EDIT_SECTIONS.forEach(([title,fields])=>{
     const sec=document.createElement("div");sec.className="esec";
     const h=document.createElement("h3");h.textContent=title;sec.appendChild(h);
@@ -444,6 +453,8 @@ function collectPatch(){
   });
   const logoSel=document.querySelector('#eBody [data-style-logo]');
   if(logoSel) patch.style=Object.assign(patch.style||{},{logo:logoSel.value});
+  const tsSel=document.querySelector('#eBody [data-style-ts]');
+  if(tsSel) patch.style=Object.assign(patch.style||{},{textScale:tsSel.value});
   return patch;
 }
 async function openEditor(){

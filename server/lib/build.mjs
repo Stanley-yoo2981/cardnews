@@ -240,6 +240,27 @@ h1{text-shadow:0 2px 20px rgba(0,0,0,.55),0 1px 2px rgba(0,0,0,.5)}
 .sub{text-shadow:0 1px 12px rgba(0,0,0,.55)}
 .foot .tag,.foot .swipe,.cover .quote{text-shadow:0 1px 8px rgba(0,0,0,.5)}
 .cover .body-area{justify-content:flex-end}
+
+/* 전체 글자 크기 배율(편집에서 조절). buildHtml 이 :root{--ts} 를 주입한다. */
+:root{--ts:1}
+h1{font-size:calc(100px*var(--ts))}
+h1.sm{font-size:calc(82px*var(--ts))}
+h1.xs{font-size:calc(70px*var(--ts))}
+h1.xxs{font-size:calc(60px*var(--ts))}
+.cover h1{font-size:calc(112px*var(--ts))}
+.cover h1.sm{font-size:calc(96px*var(--ts))}
+.cover h1.xs{font-size:calc(82px*var(--ts))}
+.cover h1.xxs{font-size:calc(70px*var(--ts))}
+.sub{font-size:calc(38px*var(--ts))}
+.sub.small{font-size:calc(34px*var(--ts))}
+.sub.tight{font-size:calc(33px*var(--ts))}
+.kicker{font-size:calc(24px*var(--ts))}
+.card p{font-size:calc(34px*var(--ts))}
+.card p small{font-size:calc(26px*var(--ts))}
+.stats span{font-size:calc(22px*var(--ts))}
+.stats strong{font-size:calc(40px*var(--ts))}
+.vs div{font-size:calc(34px*var(--ts))}
+.cover .quote{font-size:calc(36px*var(--ts))}
 `;
 
 function subClass(text) {
@@ -503,12 +524,14 @@ export function buildHtml(d) {
   list.push(slideCta(d.lawyer, d.cta_h1, d.cta_h1_em, B[10], K, pg));
   const slides = list.join("\n");
 
-  // 편집에서 고른 로고 크기(px) 반영. 없으면 기본(REFINE 64px).
-  const logoH = Number(d.style && d.style.logo);
-  const styleCss =
-    Number.isFinite(logoH) && logoH >= 30 && logoH <= 160
-      ? `.top .logo{height:${Math.round(logoH)}px;max-width:${Math.round(logoH * 7)}px}`
-      : "";
+  // 편집에서 고른 스타일(로고 크기·전체 글자 크기) 반영.
+  const St = d.style || {};
+  let styleCss = "";
+  const logoH = Number(St.logo);
+  if (Number.isFinite(logoH) && logoH >= 30 && logoH <= 160)
+    styleCss += `.top .logo{height:${Math.round(logoH)}px;max-width:${Math.round(logoH * 7)}px}`;
+  const ts = Number(St.textScale);
+  if (Number.isFinite(ts) && ts >= 0.8 && ts <= 1.4) styleCss += `:root{--ts:${ts}}`;
 
   return `<!DOCTYPE html>
 <html lang="ko">
