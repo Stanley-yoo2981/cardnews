@@ -12,8 +12,20 @@ const UA =
 // 배경으로 부적절한 이미지(로고·아이콘·프로필·배너·추적픽셀 등) 키워드
 const BAD = /logo|icon|sprite|favicon|blank|spacer|pixel|avatar|profile|thumb_s|badge|emoji|button|btn|share|sns|kakao|naver|banner|footer|header_|watermark|loading|dummy/i;
 
+// 문서 이미지(판결문·약식명령·결정문 등)는 배경으로 쓰지 않는다.
+// 판결문은 검수화면의 '판결문' 버튼으로 전용 카드에만 들어가야 한다.
+const DOC = /판결|판결문|약식|명령|결정문|선고|등본|정본|조서|공소장|소장|verdict|judg?ment|_doc|document/i;
+
 // 배경으로 쓸 만한 래스터 이미지 확장자만(svg/gif 제외 — 아이콘·애니 비중이 큼)
 const OKEXT = /\.(jpe?g|png|webp)(\?|#|$)/i;
+
+const safeDecode = (s) => {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+};
 
 /**
  * HTML 에서 배경 후보 이미지 URL 을 문서 순서대로 추출한다(절대경로로 변환).
@@ -26,7 +38,7 @@ export function extractImages(html, baseUrl) {
   const out = [];
   const seen = new Set();
 
-  const push = (raw) => {
+  const push = (raw, ctx) => {
     if (!raw) return;
     let u = String(raw).trim().replace(/&amp;/g, "&");
     if (!u || u.startsWith("data:")) return;
@@ -39,6 +51,9 @@ export function extractImages(html, baseUrl) {
     if (!/^https?:/i.test(abs)) return;
     if (!OKEXT.test(abs)) return;
     if (BAD.test(abs)) return;
+    // 판결문 등 문서 이미지는 배경에서 제외(파일명·alt 를 디코드해 검사)
+    const hay = safeDecode(abs) + " " + (ctx || "");
+    if (DOC.test(hay)) return;
     if (seen.has(abs)) return;
     seen.add(abs);
     out.push(abs);
@@ -47,13 +62,14 @@ export function extractImages(html, baseUrl) {
   // <img src>, data-src, data-original (지연로딩), 그리고 srcset 의 첫 후보
   const imgTags = src.match(/<img\b[^>]*>/gi) || [];
   for (const tag of imgTags) {
+    const alt = (tag.match(/\balt\s*=\s*["']([^"']*)["']/i) || [])[1] || "";
     const lazy =
       (tag.match(/\bdata-(?:src|original|lazy-src)\s*=\s*["']([^"']+)["']/i) || [])[1];
     const plain = (tag.match(/\bsrc\s*=\s*["']([^"']+)["']/i) || [])[1];
     const srcset = (tag.match(/\bsrcset\s*=\s*["']([^"']+)["']/i) || [])[1];
-    push(lazy);
-    push(plain);
-    if (srcset) push(srcset.split(",").pop().trim().split(/\s+/)[0]);
+    push(lazy, alt);
+    push(plain, alt);
+    if (srcset) push(srcset.split(",").pop().trim().split(/\s+/)[0], alt);
   }
 
   // og:image (대표 이미지) — 있으면 앞쪽 우선순위로

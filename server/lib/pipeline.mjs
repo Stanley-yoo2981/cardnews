@@ -263,26 +263,38 @@ export async function runPipeline(input) {
     }
   }
 
-  // 배경 이미지(텍스트 확정 후). 우선순위:
-  //  1) 원문 URL 에 삽입된 실제 이미지  2) AI 생성 배경  3) CSS 메쉬(폴백)
+  // 배경(텍스트 확정 후): 슬라이드마다 서로 다른 이미지 1장씩.
+  //  1) 원문 사진(문서=판결문 제외, 중복 없음)  2) 빈 칸은 AI 이미지로 채움  3) 그래도 없으면 CSS 메쉬
+  const bg = {};
   if (articleHtml && urlForRecord) {
     try {
-      const bg = await backgroundsFromSource(articleHtml, urlForRecord, { cap: 10 });
-      if (Object.keys(bg).length) {
-        data.bg = bg;
-        data.bgKind = "src";
-      }
+      Object.assign(bg, await backgroundsFromSource(articleHtml, urlForRecord, { cap: 10 }));
     } catch (e) {
       console.error("[srcimg] 원문 이미지 배경 건너뜀:", e.message);
     }
   }
-  if (!data.bg && image.isEnabled()) {
-    try {
-      data.bg = await image.generateBackgrounds(data);
-      data.bgKind = "ai";
-    } catch (e) {
-      console.error("[image] 배경 생성 건너뜀:", e.message);
+  // 빈 칸을 AI 이미지로 채운다(OPENAI_API_KEY 있을 때, CARDNEWS_FILL=off 로 끌 수 있음).
+  if (process.env.OPENAI_API_KEY && process.env.CARDNEWS_FILL !== "off") {
+    const need = [];
+    for (let n = 1; n <= 10; n++) if (!bg[n]) need.push(n);
+    if (need.length) {
+      const kick = { 2: data.s2, 3: data.s3, 4: data.s4, 5: data.s5, 6: data.s6, 7: data.s7, 8: data.s8, 9: data.s9 };
+      const themeFor = (n) => (n === 1 || n === 10 ? data.category : (kick[n] && kick[n].kicker) || data.category) || "법률";
+      try {
+        const gen = await Promise.all(
+          need.map((n) => image.generateImage(image.backgroundPrompt(themeFor(n))).catch(() => null))
+        );
+        need.forEach((n, i) => {
+          if (gen[i]) bg[n] = gen[i];
+        });
+      } catch (e) {
+        console.error("[image] AI 빈칸 채움 실패:", e.message);
+      }
     }
+  }
+  if (Object.keys(bg).length) {
+    data.bg = bg;
+    data.bgKind = "src"; // 원문·AI 모두 '선명 + 하단 그라데이션' 처리
   }
 
   // 최종 빌드 → compliance(재확인) → 렌더 → caption/data.json
