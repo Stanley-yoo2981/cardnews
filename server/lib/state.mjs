@@ -114,6 +114,7 @@ export function draftsList() {
       dir: u.dir,
       id: String(u.dir || "").split("_").pop(),
       lawyer: u.lawyer || null,
+      lawyerAuto: Boolean(u.lawyerAuto),
       url: u.url || null,
       title: u.title || null,
       at: u.at || null,

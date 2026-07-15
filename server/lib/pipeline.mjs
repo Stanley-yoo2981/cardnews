@@ -7,7 +7,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-import { generateSlides, extractLawyer } from "./generate.mjs";
+import { generateSlides, extractLawyer, LAWYERS } from "./generate.mjs";
 import { buildHtml } from "./build.mjs";
 import * as image from "./image.mjs";
 import { backgroundsFromSource } from "./srcimg.mjs";
@@ -94,6 +94,11 @@ export function applyEditablePatch(data, patch) {
   const str = (v) => String(v ?? "");
   for (const k of EDIT_TEXT) if (k in patch) data[k] = str(patch[k]);
   if (Array.isArray(patch.hashtags)) data.hashtags = patch.hashtags.map(str).slice(0, 8);
+  // 검토 변호사 변경(4인 중에서만). 사람이 확정하면 '자동 기본값' 표시를 해제한다.
+  if (LAWYERS.includes(patch.lawyer)) {
+    data.lawyer = patch.lawyer;
+    data.lawyerAuto = false;
+  }
 
   // 스타일(현재는 로고 크기). "" 이면 기본값으로 되돌린다.
   if (patch.style && typeof patch.style === "object") {
@@ -253,7 +258,7 @@ export async function runPipeline(input) {
   let data;
   let lastErr = null;
   for (let attempt = 1; attempt <= 2; attempt++) {
-    data = await generateSlides(articleText, { lawyerHint, retryReason: lastErr });
+    data = await generateSlides(articleText, { lawyerHint, retryReason: lastErr, lawyerOverride: input.lawyer });
     const chk = await buildAndCheck(dir, data); // 배경 없이 문안만 검사(배경은 검사에 영향 없음)
     if (chk.ok) {
       lastErr = null;
@@ -328,6 +333,7 @@ export async function runPipeline(input) {
     title,
     category: data.category || title,
     lawyer: data.lawyer,
+    lawyerAuto: Boolean(data.lawyerAuto),
     dir: relDir,
     cardCount,
   });

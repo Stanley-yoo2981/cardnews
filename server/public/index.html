@@ -321,6 +321,7 @@ async function openViewer(dir){
   let meta=d.reviewedAt?("최근 검수: "+(d.reviewer||"")+" · "+new Date(d.reviewedAt).toLocaleString("ko-KR")):"아직 검수 전";
   if(d.driveUrl) meta+=' · <a href="'+d.driveUrl+'" target="_blank" style="color:var(--gold2)">☁ 드라이브</a>';
   else if(d.driveError) meta+=' · <span style="color:#ffb4a2">드라이브 실패</span>';
+  if(d.lawyerAuto) meta='<span style="color:#ffb4a2">⚠ 검토 변호사 기본값('+esc(d.lawyer||"김선호")+') — 실제 담당자인지 편집에서 확인하세요.</span><br>'+meta;
   $("#vMeta").innerHTML=meta;
   $("#vStatus").textContent="";
   $("#viewer").classList.remove("hidden");document.body.style.overflow="hidden";
@@ -407,7 +408,16 @@ function buildEditorForm(data){
   body.appendChild(note);
   // 디자인 — 로고 크기
   const dsec=document.createElement("div");dsec.className="esec";
-  const dh=document.createElement("h3");dh.textContent="디자인";dsec.appendChild(dh);
+  const dh=document.createElement("h3");dh.textContent="설정 · 디자인";dsec.appendChild(dh);
+  // 검토 변호사(4인 중 실제 담당자)
+  const lf=document.createElement("div");lf.className="efield";
+  const ll=document.createElement("label");ll.textContent="검토 변호사"+(data.lawyerAuto?" ⚠ 자동 기본값 — 실제 담당자로 확인/변경":"");
+  if(data.lawyerAuto) ll.style.color="#ffb4a2";
+  lf.appendChild(ll);
+  const lsel=document.createElement("select");lsel.dataset.lawyer="1";
+  ["유영규","김환섭","홍기웅","김선호"].forEach(v=>{const o=document.createElement("option");o.value=v;o.textContent=v+" 변호사";lsel.appendChild(o);});
+  lsel.value=data.lawyer||"김선호";
+  lf.appendChild(lsel);dsec.appendChild(lf);
   const df=document.createElement("div");df.className="efield";
   const dl=document.createElement("label");dl.textContent="로고 크기 (좌측 상단)";df.appendChild(dl);
   const dsel=document.createElement("select");dsel.dataset.styleLogo="1";
@@ -455,6 +465,8 @@ function collectPatch(){
   if(logoSel) patch.style=Object.assign(patch.style||{},{logo:logoSel.value});
   const tsSel=document.querySelector('#eBody [data-style-ts]');
   if(tsSel) patch.style=Object.assign(patch.style||{},{textScale:tsSel.value});
+  const lwSel=document.querySelector('#eBody [data-lawyer]');
+  if(lwSel) patch.lawyer=lwSel.value;
   return patch;
 }
 async function openEditor(){

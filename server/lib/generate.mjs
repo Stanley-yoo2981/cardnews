@@ -134,12 +134,13 @@ export async function generateSlides(articleText, opts = {}) {
   const data = stripToJson(textOut);
 
   // 변호사 확정: 원문 정규식 우선, 없으면 모델이 뽑은 값, 넷 중 하나여야 함
-  const lawyer = lawyerHint || (LAWYERS.includes(data.lawyer) ? data.lawyer : null);
-  if (!lawyer) {
-    throw new Error(
-      "검토 변호사 이름을 원문에서 확인하지 못했습니다. (유영규/김환섭/홍기웅/김선호) — 임의로 넣지 않고 중단합니다."
-    );
-  }
+  // 우선순위: 원문에서 찾은 이름 > 사람이 고른 담당 변호사 > 모델 추출값 > 기본값(김선호).
+  // 기본값으로 넣은 경우(lawyerAuto=true)는 검수화면에서 표시하고 편집으로 바꿀 수 있게 한다.
+  const DEFAULT_LAWYER = LAWYERS.includes(process.env.DEFAULT_LAWYER) ? process.env.DEFAULT_LAWYER : "김선호";
+  const override = LAWYERS.includes(opts.lawyerOverride) ? opts.lawyerOverride : null;
+  const found = lawyerHint || override || (LAWYERS.includes(data.lawyer) ? data.lawyer : null);
+  data.lawyer = found || DEFAULT_LAWYER;
+  data.lawyerAuto = !found;
   data.lawyer = lawyer;
   return data;
 }

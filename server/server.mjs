@@ -106,7 +106,7 @@ app.post("/api/edit", async (req, res) => {
     patchDraft(dir, { status: "pending" }); // 편집했으니 다시 검수 대기로
 
     const cardCount = data.verdict && data.verdict.uri ? 11 : 10;
-    patchDraft(dir, { cardCount });
+    patchDraft(dir, { cardCount, lawyer: data.lawyer, lawyerAuto: Boolean(data.lawyerAuto) });
     // 편집 결과를 드라이브에 다시 백업(이미지·편집원본·목록).
     await persist.backupDraft(dir);
 
