@@ -6,8 +6,6 @@
 //
 // 실패/미발견 시: 빈 배열/빈 맵을 돌려 파이프라인이 CSS 메쉬로 폴백하게 한다(무해).
 
-import crypto from "node:crypto";
-
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 
@@ -109,9 +107,7 @@ async function fetchOne(url, referer) {
   // 15KB 미만은 아이콘/썸네일일 가능성이 큼 / 6MB 초과는 과대(스킵)
   if (buf.length < 15 * 1024 || buf.length > 6 * 1024 * 1024) return null;
   const mime = ct.split(";")[0].trim();
-  // 내용 해시: 같은 사진이 다른 URL 로 여러 번 실려도(로테이션 원인) 한 번만 쓰도록.
-  const hash = crypto.createHash("sha1").update(buf).digest("hex");
-  return { uri: `data:${mime};base64,${buf.toString("base64")}`, hash };
+  return `data:${mime};base64,${buf.toString("base64")}`;
 }
 
 /**
@@ -125,16 +121,11 @@ async function fetchOne(url, referer) {
 export async function fetchImages(urls, opts = {}) {
   const cap = Math.max(1, Math.min(12, opts.cap || 10));
   // 실패에 대비해 여유분까지 '병렬'로 받는다(순차보다 훨씬 빠름). 순서는 유지.
-  // 넉넉히 받아 '내용 중복'을 걸러도 cap 을 채울 수 있게 한다.
-  const tryList = urls.slice(0, cap + 14);
+  const tryList = urls.slice(0, cap + 6);
   const results = await Promise.all(tryList.map((u) => fetchOne(u, opts.referer)));
   const out = [];
-  const seenHash = new Set();
-  for (const r of results) {
-    if (!r) continue;
-    if (seenHash.has(r.hash)) continue; // 같은 사진(내용 동일) 재사용 금지 → 로테이션 제거
-    seenHash.add(r.hash);
-    out.push(r.uri);
+  for (const uri of results) {
+    if (uri) out.push(uri);
     if (out.length >= cap) break;
   }
   return out;

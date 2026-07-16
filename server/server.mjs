@@ -8,7 +8,6 @@ import { fileURLToPath } from "node:url";
 
 import fs from "node:fs";
 import { runPipeline, renderDraft, applyEditablePatch } from "./lib/pipeline.mjs";
-import { cardCountOf } from "./lib/build.mjs";
 import { queueStatus, draftsList, setReview, patchDraft } from "./lib/state.mjs";
 import { DATA_DIR, DRAFTS_DIR } from "./lib/paths.mjs";
 import * as persist from "./lib/persist.mjs";
@@ -106,8 +105,8 @@ app.post("/api/edit", async (req, res) => {
     await renderDraft(abs, data); // compliance 재검사 포함 — 통과 못 하면 여기서 실패
     patchDraft(dir, { status: "pending" }); // 편집했으니 다시 검수 대기로
 
-    const cardCount = cardCountOf(data);
-    patchDraft(dir, { cardCount, lawyer: data.lawyer, lawyerAuto: Boolean(data.lawyerAuto) });
+    const cardCount = data.verdict && data.verdict.uri ? 11 : 10;
+    patchDraft(dir, { cardCount });
     // 편집 결과를 드라이브에 다시 백업(이미지·편집원본·목록).
     await persist.backupDraft(dir);
 
@@ -143,8 +142,8 @@ app.post("/api/verdict", async (req, res) => {
       }
       data.verdict = { uri: String(image), kind: "doc" };
     } else if (generate) {
-      if (!imageGen.canGenerate()) {
-        throw new Error("이미지 생성 제공자가 없습니다. 무료: IMAGE_PROVIDER=cloudflare(+CF_ACCOUNT_ID/CF_API_TOKEN), 유료: OPENAI_API_KEY.");
+      if (!process.env.OPENAI_API_KEY) {
+        throw new Error("이미지 생성을 위한 OPENAI_API_KEY가 서버에 설정되어 있지 않습니다.");
       }
       const uri = await imageGen.generateImage(imageGen.backgroundPrompt(data.category || "법률 성공사례"));
       data.verdict = { uri, kind: "ai" };
@@ -153,7 +152,7 @@ app.post("/api/verdict", async (req, res) => {
     }
 
     await renderDraft(abs, data); // 판결문 카드 포함해 재렌더 + compliance 재확인
-    const cardCount = cardCountOf(data);
+    const cardCount = data.verdict && data.verdict.uri ? 11 : 10;
     patchDraft(dir, { status: "pending", cardCount });
     await persist.backupDraft(dir);
 

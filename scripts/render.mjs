@@ -41,9 +41,8 @@ await page.evaluate(() => {
 });
 
 const slides = await page.$$(".slide");
-// SNS 10~11장 / 상세(보험) 6~12장. compliance.mjs 와 동일 범위.
-if (slides.length < 6 || slides.length > 12) {
-  console.error(`슬라이드 수 오류: ${slides.length}장 (6~12장이어야 함)`);
+if (slides.length < 10) {
+  console.error(`슬라이드 수 오류: ${slides.length}장`);
   await browser.close();
   process.exit(1);
 }
