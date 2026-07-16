@@ -254,6 +254,7 @@ function writeReview(dir, data, meta) {
  * @returns {Promise<object>} { dir, relDir, id, date, lawyer, cards, caption, review, source }
  */
 export async function runPipeline(input) {
+  const mode = input.mode === "detail" ? "detail" : "sns";
   let articleText;
   let articleHtml = null; // 원문 HTML(있으면 배경 이미지 추출에 사용)
   let key;
@@ -270,7 +271,7 @@ export async function runPipeline(input) {
       err.code = "QUEUE_EXHAUSTED";
       throw err;
     }
-    key = normalizeUrl(item.url);
+    key = normalizeUrl(item.url) + "_" + mode;
     id = String(item.id);
     dateStr = item.date || dateStr;
     urlForRecord = item.url;
@@ -280,7 +281,7 @@ export async function runPipeline(input) {
   } else if (input.type === "url") {
     const url = String(input.url || "").trim();
     if (!url) throw new Error("URL이 비어 있습니다.");
-    key = normalizeUrl(url);
+    key = normalizeUrl(url) + "_" + mode;
     if (isUsed(key)) {
       const err = new Error("이미 사용한 URL입니다. 한번 사용한 주소는 다시 쓸 수 없습니다.");
       err.code = "ALREADY_USED";
@@ -295,7 +296,7 @@ export async function runPipeline(input) {
   } else if (input.type === "manuscript") {
     articleText = String(input.manuscript || "").trim();
     if (!articleText) throw new Error("원고가 비어 있습니다.");
-    key = manuscriptKey(articleText);
+    key = manuscriptKey(articleText) + "_" + mode;
     if (isUsed(key)) {
       const err = new Error("이미 사용한 원고입니다. 같은 글은 다시 생성할 수 없습니다.");
       err.code = "ALREADY_USED";
@@ -313,7 +314,6 @@ export async function runPipeline(input) {
   const dir = draftDir(dateStr, id);
   let data;
   let lastErr = null;
-  const mode = input.mode === "detail" ? "detail" : "sns";
   for (let attempt = 1; attempt <= 2; attempt++) {
     data = await generateSlides(articleText, { lawyerHint, retryReason: lastErr, lawyerOverride: input.lawyer, mode });
     const chk = await buildAndCheck(dir, data); // 배경 없이 문안만 검사(배경은 검사에 영향 없음)
