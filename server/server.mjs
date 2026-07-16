@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 
 import fs from "node:fs";
 import { runPipeline, renderDraft, applyEditablePatch } from "./lib/pipeline.mjs";
+import { cardCountOf, buildHtml } from "./lib/build.mjs";
 import { queueStatus, draftsList, setReview, patchDraft } from "./lib/state.mjs";
 import { DATA_DIR, DRAFTS_DIR } from "./lib/paths.mjs";
 import * as persist from "./lib/persist.mjs";
@@ -85,6 +86,23 @@ app.get("/api/draft-data", async (req, res) => {
   }
 });
 
+// 실시간 미리보기 HTML: data.json 으로 카드 덱을 즉석 생성해 돌려준다.
+// (index.html 은 드라이브 백업 대상이 아니라 콜드 재시작 후 없을 수 있어 data.json 으로 만든다.)
+app.get("/api/preview", async (req, res) => {
+  try {
+    const dir = String(req.query.dir || "");
+    const abs = safeDraftDir(dir);
+    if (!abs) return res.status(400).type("text/plain; charset=utf-8").send("잘못된 경로");
+    try { await persist.ensureDraftLocal(dir); } catch (e) { console.error("[persist]", e.message); }
+    const dataPath = path.join(abs, "data.json");
+    if (!fs.existsSync(dataPath)) return res.status(404).type("text/plain; charset=utf-8").send("편집 데이터 없음");
+    const data = JSON.parse(fs.readFileSync(dataPath, "utf8"));
+    res.type("text/html; charset=utf-8").send(buildHtml(data));
+  } catch (e) {
+    res.status(500).type("text/plain; charset=utf-8").send(e.message);
+  }
+});
+
 // 편집 저장 + 재렌더: { dir, patch }. 문안만 바꾸고 배경은 그대로 유지한다.
 // 편집 후에는 재검수가 필요하므로 상태를 '검수 대기'로 되돌린다.
 app.post("/api/edit", async (req, res) => {
@@ -105,8 +123,8 @@ app.post("/api/edit", async (req, res) => {
     await renderDraft(abs, data); // compliance 재검사 포함 — 통과 못 하면 여기서 실패
     patchDraft(dir, { status: "pending" }); // 편집했으니 다시 검수 대기로
 
-    const cardCount = data.verdict && data.verdict.uri ? 11 : 10;
-    patchDraft(dir, { cardCount });
+    const cardCount = cardCountOf(data);
+    patchDraft(dir, { cardCount, lawyer: data.lawyer, lawyerAuto: Boolean(data.lawyerAuto) });
     // 편집 결과를 드라이브에 다시 백업(이미지·편집원본·목록).
     await persist.backupDraft(dir);
 
@@ -142,8 +160,8 @@ app.post("/api/verdict", async (req, res) => {
       }
       data.verdict = { uri: String(image), kind: "doc" };
     } else if (generate) {
-      if (!process.env.OPENAI_API_KEY) {
-        throw new Error("이미지 생성을 위한 OPENAI_API_KEY가 서버에 설정되어 있지 않습니다.");
+      if (!imageGen.canGenerate()) {
+        throw new Error("이미지 생성 제공자가 없습니다. 무료: IMAGE_PROVIDER=cloudflare(+CF_ACCOUNT_ID/CF_API_TOKEN), 유료: OPENAI_API_KEY.");
       }
       const uri = await imageGen.generateImage(imageGen.backgroundPrompt(data.category || "법률 성공사례"));
       data.verdict = { uri, kind: "ai" };
@@ -152,7 +170,7 @@ app.post("/api/verdict", async (req, res) => {
     }
 
     await renderDraft(abs, data); // 판결문 카드 포함해 재렌더 + compliance 재확인
-    const cardCount = data.verdict && data.verdict.uri ? 11 : 10;
+    const cardCount = cardCountOf(data);
     patchDraft(dir, { status: "pending", cardCount });
     await persist.backupDraft(dir);
 

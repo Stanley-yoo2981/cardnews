@@ -7,8 +7,8 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-import { generateSlides, extractLawyer } from "./generate.mjs";
-import { buildHtml } from "./build.mjs";
+import { generateSlides, extractLawyer, LAWYERS } from "./generate.mjs";
+import { buildHtml, cardCountOf } from "./build.mjs";
 import * as image from "./image.mjs";
 import { backgroundsFromSource } from "./srcimg.mjs";
 import * as persist from "./persist.mjs";
@@ -85,7 +85,7 @@ function writeCaption(dir, data) {
 
 // 편집 가능한 필드만 추려 data 에 반영한다(서버가 받은 patch 를 신뢰하지 않는다).
 // 배경(bg)·변호사(lawyer) 등 안전에 민감한 값은 편집 대상이 아니다.
-const EDIT_TEXT = ["category", "cover_h1", "cover_h1_em", "cover_quote", "cta_h1", "cta_h1_em", "caption"];
+const EDIT_TEXT = ["category", "cover_h1", "cover_h1_em", "cover_quote", "cover_sub", "cta_h1", "cta_h1_em", "caption"];
 const EDIT_SLIDES = ["s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9"];
 const EDIT_SLIDE_TEXT = ["kicker", "h1", "h1_em", "sub", "vs_a_title", "vs_a_desc", "vs_b_title", "vs_b_desc"];
 
@@ -94,6 +94,11 @@ export function applyEditablePatch(data, patch) {
   const str = (v) => String(v ?? "");
   for (const k of EDIT_TEXT) if (k in patch) data[k] = str(patch[k]);
   if (Array.isArray(patch.hashtags)) data.hashtags = patch.hashtags.map(str).slice(0, 8);
+  // 검토 변호사 변경(4인 중에서만). 사람이 확정하면 '자동 기본값' 표시를 해제한다.
+  if (LAWYERS.includes(patch.lawyer)) {
+    data.lawyer = patch.lawyer;
+    data.lawyerAuto = false;
+  }
 
   // 스타일(현재는 로고 크기). "" 이면 기본값으로 되돌린다.
   if (patch.style && typeof patch.style === "object") {
@@ -102,6 +107,44 @@ export function applyEditablePatch(data, patch) {
       const lg = Number(patch.style.logo);
       if (Number.isFinite(lg) && lg >= 30 && lg <= 160) data.style.logo = Math.round(lg);
       else delete data.style.logo;
+    }
+    if ("textScale" in patch.style) {
+      const ts = Number(patch.style.textScale);
+      if (Number.isFinite(ts) && ts >= 0.8 && ts <= 1.4) data.style.textScale = ts;
+      else delete data.style.textScale;
+    }
+    // 카드별 글자 크기(cover, s2..s9, sec0..sec7, verdict, cta). 0.6~1.8 배, "" 이면 해제.
+    if (patch.style.slideScale && typeof patch.style.slideScale === "object") {
+      data.style.slideScale = data.style.slideScale || {};
+      const SCALE_KEY = /^(cover|cta|verdict|s[2-9]|sec[0-7])$/;
+      for (const [k, raw] of Object.entries(patch.style.slideScale)) {
+        if (!SCALE_KEY.test(k)) continue;
+        const v = Number(raw);
+        if (Number.isFinite(v) && v >= 0.6 && v <= 1.8) data.style.slideScale[k] = v;
+        else delete data.style.slideScale[k];
+      }
+    }
+    // 카드별 상하 위치(top|center|bottom). "" 이면 해제(기본 배치).
+    if (patch.style.align && typeof patch.style.align === "object") {
+      data.style.align = data.style.align || {};
+      const ALIGN_KEY = /^(cover|cta|verdict|s[2-9]|sec[0-7])$/;
+      for (const [k, v] of Object.entries(patch.style.align)) {
+        if (!ALIGN_KEY.test(k)) continue;
+        if (["top", "center", "bottom"].includes(v)) data.style.align[k] = v;
+        else delete data.style.align[k];
+      }
+    }
+    // 필드별 글자 크기(px). 키는 data-f 와 동일(category, cover_h1, cover_h1_em, s2.h1, s6.stats.0.value ...).
+    // 10~240px 범위만 허용. "" 이거나 범위 밖이면 해당 키 해제(기본 크기로 복귀).
+    if (patch.style.fontPx && typeof patch.style.fontPx === "object") {
+      data.style.fontPx = data.style.fontPx || {};
+      const KEY_OK = /^[a-z0-9_.]+$/i;
+      for (const [k, raw] of Object.entries(patch.style.fontPx)) {
+        if (!KEY_OK.test(k)) continue;
+        const v = Number(raw);
+        if (Number.isFinite(v) && v >= 10 && v <= 240) data.style.fontPx[k] = Math.round(v);
+        else delete data.style.fontPx[k];
+      }
     }
   }
 
@@ -121,6 +164,29 @@ export function applyEditablePatch(data, patch) {
         .filter((x) => x.title || x.desc)
         .slice(0, 3);
     if (Array.isArray(p.checks)) data[s].checks = p.checks.map(str).filter(Boolean).slice(0, 4);
+  }
+
+  // 상세 버전: 표지 부제(cover_sub)는 위 EDIT_TEXT 에서 처리됨. 본문 카드(sections) 편집.
+  if (data.mode === "detail" && Array.isArray(patch.sections)) {
+    data.sections = Array.isArray(data.sections) ? data.sections : [];
+    patch.sections.forEach((ps, i) => {
+      if (!ps || typeof ps !== "object") return;
+      data.sections[i] = data.sections[i] || {};
+      for (const f of ["h1", "h1_em", "lead", "body"]) if (f in ps) data.sections[i][f] = str(ps[f]);
+    });
+  }
+
+  // 카드별 이미지 빼기/넣기. key: cover,s2..s9,sec0..sec7,cta.
+  //  "none"=이미지 제거(메쉬), data:URI=그 이미지 사용, ""=기본으로 복귀.
+  if (patch.cardImg && typeof patch.cardImg === "object") {
+    data.cardImg = data.cardImg || {};
+    const KEY = /^(cover|cta|s[2-9]|sec[0-7])$/;
+    for (const [k, v] of Object.entries(patch.cardImg)) {
+      if (!KEY.test(k)) continue;
+      if (v === "none") data.cardImg[k] = "none";
+      else if (typeof v === "string" && /^data:image\/(png|jpe?g|webp);base64,/i.test(v)) data.cardImg[k] = v;
+      else delete data.cardImg[k];
+    }
   }
   return data;
 }
@@ -247,8 +313,9 @@ export async function runPipeline(input) {
   const dir = draftDir(dateStr, id);
   let data;
   let lastErr = null;
+  const mode = input.mode === "detail" ? "detail" : "sns";
   for (let attempt = 1; attempt <= 2; attempt++) {
-    data = await generateSlides(articleText, { lawyerHint, retryReason: lastErr });
+    data = await generateSlides(articleText, { lawyerHint, retryReason: lastErr, lawyerOverride: input.lawyer, mode });
     const chk = await buildAndCheck(dir, data); // 배경 없이 문안만 검사(배경은 검사에 영향 없음)
     if (chk.ok) {
       lastErr = null;
@@ -263,30 +330,56 @@ export async function runPipeline(input) {
     }
   }
 
-  // 배경(텍스트 확정 후): 슬라이드마다 서로 다른 이미지 1장씩.
-  //  1) 원문 사진(문서=판결문 제외, 중복 없음)  2) 빈 칸은 AI 이미지로 채움  3) 그래도 없으면 CSS 메쉬
+  // 배경(텍스트 확정 후): 카드마다 서로 다른 이미지 1장씩.
+  //  1) 원문 사진(문서=판결문 제외, 내용중복 없음)  2) 빈 칸은 AI 이미지  3) 그래도 없으면 카드별 CSS 메쉬
+  // 배경이 필요한 '슬롯 번호' 목록을 모드에 맞게 계산(판결문 카드는 자체 배경이라 제외).
+  const secN = data.mode === "detail" && Array.isArray(data.sections) ? Math.min(8, data.sections.length) : 0;
+  let slots;
+  let themeFor;
+  if (data.mode === "detail") {
+    const ctaN = 1 + secN + (data.verdict && data.verdict.uri ? 1 : 0) + 1;
+    slots = [];
+    for (let k = 1; k <= 1 + secN; k++) slots.push(k); // 표지 + 본문 카드
+    slots.push(ctaN); // 상담 카드
+    themeFor = (s) => {
+      if (s === 1 || s === ctaN) return data.category || "법률";
+      const sec = data.sections[s - 2];
+      return (sec && (sec.h1 || sec.lead)) || data.category || "법률";
+    };
+  } else {
+    slots = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]; // SNS: 상담 카드는 B[10] 고정
+    const kick = { 2: data.s2, 3: data.s3, 4: data.s4, 5: data.s5, 6: data.s6, 7: data.s7, 8: data.s8, 9: data.s9 };
+    themeFor = (n) => (n === 1 || n === 10 ? data.category : (kick[n] && kick[n].kicker) || data.category) || "법률";
+  }
+
   const bg = {};
   if (articleHtml && urlForRecord) {
     try {
-      Object.assign(bg, await backgroundsFromSource(articleHtml, urlForRecord, { cap: 10 }));
+      const map = await backgroundsFromSource(articleHtml, urlForRecord, { cap: slots.length });
+      const uris = Object.keys(map).map((k) => Number(k)).sort((a, b) => a - b).map((k) => map[k]);
+      slots.forEach((s, idx) => { if (uris[idx]) bg[s] = uris[idx]; }); // 원문 사진을 슬롯에 유일 배정
     } catch (e) {
       console.error("[srcimg] 원문 이미지 배경 건너뜀:", e.message);
     }
   }
-  // 빈 칸을 AI 이미지로 채운다(OPENAI_API_KEY 있을 때, CARDNEWS_FILL=off 로 끌 수 있음).
-  if (process.env.OPENAI_API_KEY && process.env.CARDNEWS_FILL !== "off") {
-    const need = [];
-    for (let n = 1; n <= 10; n++) if (!bg[n]) need.push(n);
+  // 빈 칸을 AI 이미지로 채운다(제공자 설정 시, CARDNEWS_FILL=off 로 끌 수 있음).
+  if (image.canGenerate() && process.env.CARDNEWS_FILL !== "off") {
+    const need = slots.filter((s) => !bg[s]);
     if (need.length) {
-      const kick = { 2: data.s2, 3: data.s3, 4: data.s4, 5: data.s5, 6: data.s6, 7: data.s7, 8: data.s8, 9: data.s9 };
-      const themeFor = (n) => (n === 1 || n === 10 ? data.category : (kick[n] && kick[n].kicker) || data.category) || "법률";
       try {
+        let logged = false;
         const gen = await Promise.all(
-          need.map((n) => image.generateImage(image.backgroundPrompt(themeFor(n))).catch(() => null))
+          need.map((s) =>
+            image.generateImage(image.backgroundPrompt(themeFor(s))).catch((e) => {
+              if (!logged) {
+                console.error("[image] 배경 생성 실패(사유):", e.message);
+                logged = true;
+              }
+              return null;
+            })
+          )
         );
-        need.forEach((n, i) => {
-          if (gen[i]) bg[n] = gen[i];
-        });
+        need.forEach((s, i) => { if (gen[i]) bg[s] = gen[i]; });
       } catch (e) {
         console.error("[image] AI 빈칸 채움 실패:", e.message);
       }
@@ -307,13 +400,14 @@ export async function runPipeline(input) {
   // relDir 는 DATA_DIR 기준 상대경로("drafts/<name>") → URL(/drafts/...)과 일치.
   const relDir = path.relative(DATA_DIR, dir).split(path.sep).join("/");
 
-  const cardCount = data.verdict && data.verdict.uri ? 11 : 10;
+  const cardCount = cardCountOf(data);
   markUsed({
     key,
     url: urlForRecord,
     title,
     category: data.category || title,
     lawyer: data.lawyer,
+    lawyerAuto: Boolean(data.lawyerAuto),
     dir: relDir,
     cardCount,
   });
