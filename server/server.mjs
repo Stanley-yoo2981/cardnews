@@ -8,13 +8,15 @@ import { fileURLToPath } from "node:url";
 
 import fs from "node:fs";
 import { runPipeline, renderDraft, applyEditablePatch } from "./lib/pipeline.mjs";
+import { cardCountOf } from "./lib/build.mjs";
 import { queueStatus, draftsList, setReview, patchDraft } from "./lib/state.mjs";
 import { DATA_DIR, DRAFTS_DIR } from "./lib/paths.mjs";
 import * as persist from "./lib/persist.mjs";
+import * as imageGen from "./lib/image.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-app.use(express.json({ limit: "2mb" }));
+app.use(express.json({ limit: "24mb" })); // 판결문 이미지 업로드(base64) 여유
 
 // 정적: UI, 생성된 PNG(초안)
 app.use(express.static(path.join(HERE, "public")));
@@ -104,11 +106,59 @@ app.post("/api/edit", async (req, res) => {
     await renderDraft(abs, data); // compliance 재검사 포함 — 통과 못 하면 여기서 실패
     patchDraft(dir, { status: "pending" }); // 편집했으니 다시 검수 대기로
 
+    const cardCount = cardCountOf(data);
+    patchDraft(dir, { cardCount, lawyer: data.lawyer, lawyerAuto: Boolean(data.lawyerAuto) });
     // 편집 결과를 드라이브에 다시 백업(이미지·편집원본·목록).
     await persist.backupDraft(dir);
 
-    const relCards = Array.from({ length: 10 }, (_, i) => `${dir}/card_${String(i + 1).padStart(2, "0")}.png`);
+    const relCards = Array.from({ length: cardCount }, (_, i) => `${dir}/card_${String(i + 1).padStart(2, "0")}.png`);
     res.json({ ok: true, cards: relCards, caption: fs.readFileSync(path.join(abs, "caption.txt"), "utf8") });
+  } catch (e) {
+    res.status(400).json({ ok: false, code: e.code || "ERROR", error: e.message });
+  } finally {
+    busy = false;
+  }
+});
+
+// 판결문 카드: { dir, image(dataURI) } 첨부 | { dir, generate:true } 어울리는 이미지 생성 | { dir, remove:true } 제거
+app.post("/api/verdict", async (req, res) => {
+  if (busy) {
+    return res.status(409).json({ ok: false, error: "다른 작업이 진행 중입니다. 잠시 후 다시 시도하세요." });
+  }
+  busy = true;
+  try {
+    const { dir, image, generate, remove } = req.body || {};
+    const abs = safeDraftDir(String(dir || ""));
+    if (!abs) throw new Error("초안을 찾지 못했습니다.");
+    try { await persist.ensureDraftLocal(dir); } catch (e) { console.error("[persist]", e.message); }
+    const dataPath = path.join(abs, "data.json");
+    if (!fs.existsSync(dataPath)) throw new Error("이 초안은 편집 데이터가 없습니다(구버전). 다시 생성해 주세요.");
+    const data = JSON.parse(fs.readFileSync(dataPath, "utf8"));
+
+    if (remove) {
+      delete data.verdict;
+    } else if (image) {
+      if (!/^data:image\/(png|jpe?g|webp);base64,/i.test(String(image))) {
+        throw new Error("이미지 형식이 올바르지 않습니다(PNG·JPG·WEBP).");
+      }
+      data.verdict = { uri: String(image), kind: "doc" };
+    } else if (generate) {
+      if (!imageGen.canGenerate()) {
+        throw new Error("이미지 생성 제공자가 없습니다. 무료: IMAGE_PROVIDER=cloudflare(+CF_ACCOUNT_ID/CF_API_TOKEN), 유료: OPENAI_API_KEY.");
+      }
+      const uri = await imageGen.generateImage(imageGen.backgroundPrompt(data.category || "법률 성공사례"));
+      data.verdict = { uri, kind: "ai" };
+    } else {
+      throw new Error("요청 내용이 비어 있습니다.");
+    }
+
+    await renderDraft(abs, data); // 판결문 카드 포함해 재렌더 + compliance 재확인
+    const cardCount = cardCountOf(data);
+    patchDraft(dir, { status: "pending", cardCount });
+    await persist.backupDraft(dir);
+
+    const relCards = Array.from({ length: cardCount }, (_, i) => `${dir}/card_${String(i + 1).padStart(2, "0")}.png`);
+    res.json({ ok: true, cards: relCards, kind: data.verdict ? data.verdict.kind : null });
   } catch (e) {
     res.status(400).json({ ok: false, code: e.code || "ERROR", error: e.message });
   } finally {

@@ -118,6 +118,29 @@ button{font-family:inherit;cursor:pointer;border:0;border-radius:12px;font-weigh
 .efield textarea{min-height:64px;resize:vertical}
 .erow{display:flex;gap:8px}.erow .efield{flex:1}
 .ehint{color:var(--mute);font-size:12px;margin:2px 0 12px;line-height:1.5}
+
+/* 편집: 화면 반 분할 — 왼쪽 카드 미리보기 / 오른쪽 편집창 */
+.esplit{flex:1;min-height:0;display:flex}
+.epreview{flex:0 0 46%;max-width:52%;position:relative;display:flex;flex-direction:column;
+  background:#05080e;border-right:1px solid rgba(255,255,255,.08)}
+.epstage{flex:1;min-height:0;position:relative;display:flex;align-items:center;justify-content:center}
+.epstage img{max-width:100%;max-height:100%;object-fit:contain}
+.epreview .nav{position:absolute;top:50%;transform:translateY(-50%)}
+.epreview .counter{position:absolute;top:12px;left:50%;transform:translateX(-50%)}
+.ephint{flex:none;text-align:center;color:var(--mute);font-size:11.5px;padding:6px 8px;border-top:1px solid rgba(255,255,255,.06)}
+.esplit .ebody{flex:1;min-width:0}
+@media(max-width:820px){
+  .esplit{flex-direction:column}
+  .epreview{flex:0 0 40vh;max-width:none;border-right:0;border-bottom:1px solid rgba(255,255,255,.08)}
+}
+
+/* 필드별 px 크기 입력 */
+.efield .fwrap{display:flex;gap:7px;align-items:stretch}
+.efield .fwrap>:first-child{flex:1;min-width:0}
+.efield .fpx{flex:0 0 76px;text-align:center}
+.efield .fpx::-webkit-inner-spin-button{opacity:1}
+.efieldhead{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.efieldhead .pxlab{font-size:10.5px;color:var(--gold2);opacity:.75;font-weight:700}
 .estatus{padding:0 16px calc(12px + env(safe-area-inset-bottom));font-size:13.5px;min-height:20px}
 .estatus.err{color:#ffb4a2}.estatus.ok{color:var(--gold2)}
 
@@ -164,6 +187,14 @@ textarea{min-height:150px;resize:vertical;line-height:1.6}
 
   <!-- 생성 -->
   <section id="viewGen" class="hidden">
+    <div class="card">
+      <h2>버전 선택</h2>
+      <div class="seg" id="modeSeg" style="margin:0">
+        <button class="on" data-mode="sns">SNS용(짧게)</button>
+        <button data-mode="detail">보험 카톡방용(상세)</button>
+      </div>
+      <div class="hint" id="modeHint">인스타그램용 — 짧고 임팩트 있는 스토리형 10장.</div>
+    </div>
     <div class="card" id="queueCard">
       <h2>다음 회차</h2>
       <div id="queueBody"><span class="spinner"></span>상태 확인 중…</div>
@@ -247,7 +278,18 @@ textarea{min-height:150px;resize:vertical;line-height:1.6}
     <div class="t">카드뉴스 편집</div>
     <button class="esave" id="eSave">저장 &amp; 다시 렌더</button>
   </div>
-  <div class="ebody" id="eBody"></div>
+  <div class="esplit">
+    <div class="epreview">
+      <div class="epstage">
+        <img id="epImg" alt="현재 카드" onerror="this.style.visibility='hidden'">
+        <button class="nav prev" id="epPrev">‹</button>
+        <button class="nav next" id="epNext">›</button>
+        <div class="counter" id="epCounter">1 / 10</div>
+      </div>
+      <div class="ephint">항목을 누르면 해당 카드가 여기 보여요 · 저장하면 최신 이미지로 갱신</div>
+    </div>
+    <div class="ebody" id="eBody"></div>
+  </div>
   <div class="estatus" id="eStatus"></div>
 </div>
 
@@ -399,11 +441,31 @@ const EDIT_SECTIONS=[
 ];
 // 카드 글자 크기 배율 선택지(공통)
 const SCALE_OPTS=[["","기본"],["0.7","아주 작게"],["0.85","작게"],["1","보통"],["1.15","크게"],["1.3","아주 크게"],["1.5","최대"]];
+// 카드 상하 위치(빈 여백 배분)
+const ALIGN_OPTS=[["","기본(가운데)"],["top","위"],["center","가운데"],["bottom","아래"]];
 function getPath(o,p){return p.split(".").reduce((a,k)=>(a==null?undefined:a[k]),o);}
 function setPath(o,p,v){const ks=p.split(".");let c=o;
   for(let i=0;i<ks.length-1;i++){const k=ks[i],nk=ks[i+1],idx=/^\d+$/.test(nk);if(c[k]==null)c[k]=idx?[]:{};c=c[k];}
   c[ks[ks.length-1]]=v;}
 
+// 상세(보험) 버전 편집 섹션 — 본문 카드(sections) 개수에 맞춰 동적으로 만든다.
+function detailSections(data){
+  const arr=[
+    ["공통",[["카테고리(상단 배지)","category","text"]]],
+    ["표지",[["표지 헤드라인","cover_h1","area"],["강조 단어(금색)","cover_h1_em","text"],["부제(검색줄)","cover_sub","text"]],"cover"],
+  ];
+  (data.sections||[]).forEach((s,i)=>{
+    arr.push(["본문 "+(i+1),[
+      ["헤드라인","sections."+i+".h1","area"],
+      ["강조 단어(금색)","sections."+i+".h1_em","text"],
+      ["리드문(핵심 한 문장)","sections."+i+".lead","area"],
+      ["상세 본문 (문단 사이는 빈 줄, 강조는 **말** 로 감싸기)","sections."+i+".body","area"],
+    ],"sec"+i]);
+  });
+  arr.push(["마무리",[["마무리 헤드라인","cta_h1","area"],["강조 단어","cta_h1_em","text"]],"cta"]);
+  arr.push(["카톡 전달 본문",[["캡션","caption","area"],["해시태그(쉼표로 구분)","hashtags","csv"]]]);
+  return arr;
+}
 function buildEditorForm(data){
   const body=$("#eBody");body.innerHTML="";
   const note=document.createElement("div");note.className="ehint";
@@ -438,21 +500,49 @@ function buildEditorForm(data){
   tf.appendChild(tsel);dsec.appendChild(tf);
   body.appendChild(dsec);
   const scaleData=(data.style&&data.style.slideScale)||{};
-  EDIT_SECTIONS.forEach(([title,fields,slideKey])=>{
+  const fpxData=(data.style&&data.style.fontPx)||{};
+  const alignData=(data.style&&data.style.align)||{};
+  const hasV=Boolean(data.verdict&&data.verdict.uri);
+  const detail=(data.mode==="detail");
+  const secN=detail&&Array.isArray(data.sections)?data.sections.length:0;
+  // 편집할 섹션 목록 + 항목→카드 페이지 매핑(모드별)
+  let sectionsToRender,PAGE;
+  if(detail){
+    sectionsToRender=detailSections(data);
+    PAGE={cover:1,cta:1+secN+(hasV?1:0)+1};
+    for(let i=0;i<secN;i++) PAGE["sec"+i]=2+i;
+  }else{
+    sectionsToRender=EDIT_SECTIONS;
+    PAGE={cover:1,s2:2,s3:3,s4:4,s5:5,s6:6,s7:7,s8:8,s9:9,cta:hasV?11:10};
+  }
+  sectionsToRender.forEach(([title,fields,slideKey])=>{
     const sec=document.createElement("div");sec.className="esec";
+    if(slideKey&&PAGE[slideKey]){ sec.dataset.page=PAGE[slideKey]; sec.addEventListener("click",()=>showEp(PAGE[slideKey]-1)); }
     const h=document.createElement("h3");h.textContent=title;sec.appendChild(h);
-    // 이 카드의 글자 크기(카드별). 슬라이드 섹션에만 붙는다.
+    // 이 카드의 글자 크기(카드별, 배율). 슬라이드 섹션에만 붙는다.
     if(slideKey){
       const sf=document.createElement("div");sf.className="efield";
-      const sl=document.createElement("label");sl.textContent="이 카드 글자 크기";sf.appendChild(sl);
+      const sl=document.createElement("label");sl.textContent="이 카드 전체 글자 크기(배율)";sf.appendChild(sl);
       const ssel=document.createElement("select");ssel.dataset.slidescale=slideKey;
       SCALE_OPTS.forEach(([v,l])=>{const o=document.createElement("option");o.value=v;o.textContent=l;ssel.appendChild(o);});
       ssel.value=(scaleData[slideKey]!=null)?String(scaleData[slideKey]):"";
       sf.appendChild(ssel);sec.appendChild(sf);
+      // 이 카드 상하 위치(위/가운데/아래)
+      const af=document.createElement("div");af.className="efield";
+      const al=document.createElement("label");al.textContent="이 카드 위치(상하)";af.appendChild(al);
+      const asel=document.createElement("select");asel.dataset.align=slideKey;
+      ALIGN_OPTS.forEach(([v,l])=>{const o=document.createElement("option");o.value=v;o.textContent=l;asel.appendChild(o);});
+      asel.value=(alignData[slideKey]!=null)?String(alignData[slideKey]):"";
+      af.appendChild(asel);sec.appendChild(af);
     }
     fields.forEach(([label,k,type])=>{
       const f=document.createElement("div");f.className="efield";
-      const lab=document.createElement("label");lab.textContent=label;f.appendChild(lab);
+      // 개별 px 조절 대상: 카드에 실제로 찍히는 글자(캡션·해시태그 제외)
+      const pxable=(type!=="csv"&&k!=="caption");
+      const head=document.createElement("div");head.className="efieldhead";
+      const lab=document.createElement("label");lab.textContent=label;head.appendChild(lab);
+      if(pxable){const pl=document.createElement("span");pl.className="pxlab";pl.textContent="px";head.appendChild(pl);}
+      f.appendChild(head);
       let el;
       if(type==="area"){el=document.createElement("textarea");}
       else{el=document.createElement("input");el.type="text";}
@@ -460,7 +550,18 @@ function buildEditorForm(data){
       let v=getPath(data,k);
       if(type==="csv"&&Array.isArray(v)) v=v.join(", ");
       el.value=(v==null?"":v);
-      f.appendChild(el);sec.appendChild(f);
+      if(pxable){
+        const wrap=document.createElement("div");wrap.className="fwrap";
+        wrap.appendChild(el);
+        const px=document.createElement("input");px.type="number";px.className="fpx";
+        px.dataset.fpx=k;px.min="10";px.max="240";px.placeholder="자동";
+        if(fpxData[k]!=null) px.value=fpxData[k];
+        wrap.appendChild(px);
+        f.appendChild(wrap);
+      }else{
+        f.appendChild(el);
+      }
+      sec.appendChild(f);
     });
     body.appendChild(sec);
   });
@@ -478,21 +579,45 @@ function collectPatch(){
   if(logoSel) patch.style=Object.assign(patch.style||{},{logo:logoSel.value});
   const tsSel=document.querySelector('#eBody [data-style-ts]');
   if(tsSel) patch.style=Object.assign(patch.style||{},{textScale:tsSel.value});
-  // 카드별 글자 크기
+  // 카드별 글자 크기(배율)
   const ss={};
   document.querySelectorAll('#eBody [data-slidescale]').forEach(el=>{ ss[el.dataset.slidescale]=el.value; });
   if(Object.keys(ss).length) patch.style=Object.assign(patch.style||{},{slideScale:ss});
+  // 필드별 글자 크기(px)
+  const fp={};
+  document.querySelectorAll('#eBody [data-fpx]').forEach(el=>{ fp[el.dataset.fpx]=el.value; });
+  if(Object.keys(fp).length) patch.style=Object.assign(patch.style||{},{fontPx:fp});
+  // 카드 상하 위치
+  const al={};
+  document.querySelectorAll('#eBody [data-align]').forEach(el=>{ al[el.dataset.align]=el.value; });
+  if(Object.keys(al).length) patch.style=Object.assign(patch.style||{},{align:al});
   const lwSel=document.querySelector('#eBody [data-lawyer]');
   if(lwSel) patch.lawyer=lwSel.value;
   return patch;
 }
+// 편집 미리보기(왼쪽 카드)
+let epCards=[],epIdx=0;
+function buildEpCards(bust){
+  epCards=Array.from({length:curTotal},(_,i)=>"/"+curDir+"/card_"+String(i+1).padStart(2,"0")+".png"+(bust?("?v="+Date.now()):""));
+}
+function showEp(i){
+  if(!epCards.length)return;
+  epIdx=Math.max(0,Math.min(epCards.length-1,i));
+  const im=$("#epImg");im.style.visibility="visible";im.src=epCards[epIdx];
+  $("#epCounter").textContent=(epIdx+1)+" / "+epCards.length;
+}
+$("#epPrev").onclick=()=>showEp(epIdx-1);
+$("#epNext").onclick=()=>showEp(epIdx+1);
+
 async function openEditor(){
   if(!curDir)return;
   $("#eStatus").textContent="";$("#eStatus").className="estatus";
   const r=await fetch("/api/draft-data?dir="+encodeURIComponent(curDir));
   const d=await r.json();
   if(!d.ok){ alert(d.error); return; }
+  buildEpCards(false);
   buildEditorForm(d.data);
+  showEp(0);
   $("#editor").classList.remove("hidden");$("#eBody").scrollTop=0;
 }
 $("#vEdit").onclick=openEditor;
@@ -505,11 +630,12 @@ $("#eSave").onclick=async()=>{
     const r=await fetch("/api/edit",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({dir:curDir,patch})});
     const d=await safeJson(r);
     if(!d.ok) throw new Error(d.error);
-    st.className="estatus ok";st.textContent="저장 완료. 다시 검수해 주세요.";
+    st.className="estatus ok";st.textContent="저장 완료. 왼쪽 미리보기가 갱신됐어요. 다시 검수해 주세요.";
     renderCards(d.cards,true);              // 새 이미지로 교체(캐시 무시)
     $("#vCaption").textContent=d.caption||"";
     setBadge("pending");
-    setTimeout(()=>$("#editor").classList.add("hidden"),700);
+    buildEpCards(true);showEp(epIdx);       // 편집 미리보기도 최신 이미지로 갱신
+    // 저장 후에도 편집창은 열어둔다(연속 미세조정 편하게)
   }catch(e){ st.className="estatus err";st.innerHTML="실패: "+esc(e.message).replace(/\n/g,"<br>"); }
   finally{ btn.disabled=false; }
 };
@@ -567,9 +693,19 @@ async function generate(payload,statusEl,btns){
   }catch(e){ statusEl.className="status-line err";statusEl.textContent="오류: "+e.message; }
   finally{ btns.forEach(b=>b.disabled=false); }
 }
-$("#genQueue").onclick=()=>generate({type:"queue"},$("#queueStatus"),[$("#genQueue")]);
-$("#genUrl").onclick=()=>{const url=$("#urlInput").value.trim();if(!url){$("#manualStatus").className="status-line err";$("#manualStatus").textContent="URL을 입력하세요.";return;}generate({type:"url",url},$("#manualStatus"),[$("#genUrl"),$("#genMs")]);};
-$("#genMs").onclick=()=>{const m=$("#msInput").value.trim();if(m.length<120){$("#manualStatus").className="status-line err";$("#manualStatus").textContent="원고가 너무 짧습니다. 본문 전체를 붙여넣으세요.";return;}generate({type:"manuscript",manuscript:m},$("#manualStatus"),[$("#genUrl"),$("#genMs")]);};
+// 버전(모드) 선택: SNS(짧게) / detail(보험 상세)
+let genMode="sns";
+document.querySelectorAll('#modeSeg button').forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll('#modeSeg button').forEach(x=>x.classList.remove("on"));
+    b.classList.add("on");genMode=b.dataset.mode;
+    $("#modeHint").textContent=genMode==="detail"
+      ?"보험 실무자(카톡방)용 — 문단이 상세한 정보형. 디자인은 동일.":"인스타그램용 — 짧고 임팩트 있는 스토리형 10장.";
+  };
+});
+$("#genQueue").onclick=()=>generate({type:"queue",mode:genMode},$("#queueStatus"),[$("#genQueue")]);
+$("#genUrl").onclick=()=>{const url=$("#urlInput").value.trim();if(!url){$("#manualStatus").className="status-line err";$("#manualStatus").textContent="URL을 입력하세요.";return;}generate({type:"url",url,mode:genMode},$("#manualStatus"),[$("#genUrl"),$("#genMs")]);};
+$("#genMs").onclick=()=>{const m=$("#msInput").value.trim();if(m.length<120){$("#manualStatus").className="status-line err";$("#manualStatus").textContent="원고가 너무 짧습니다. 본문 전체를 붙여넣으세요.";return;}generate({type:"manuscript",manuscript:m,mode:genMode},$("#manualStatus"),[$("#genUrl"),$("#genMs")]);};
 
 loadDrafts();
 </script>

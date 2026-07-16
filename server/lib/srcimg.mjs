@@ -6,14 +6,28 @@
 //
 // 실패/미발견 시: 빈 배열/빈 맵을 돌려 파이프라인이 CSS 메쉬로 폴백하게 한다(무해).
 
+import crypto from "node:crypto";
+
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 
 // 배경으로 부적절한 이미지(로고·아이콘·프로필·배너·추적픽셀 등) 키워드
 const BAD = /logo|icon|sprite|favicon|blank|spacer|pixel|avatar|profile|thumb_s|badge|emoji|button|btn|share|sns|kakao|naver|banner|footer|header_|watermark|loading|dummy/i;
 
+// 문서 이미지(판결문·약식명령·결정문 등)는 배경으로 쓰지 않는다.
+// 판결문은 검수화면의 '판결문' 버튼으로 전용 카드에만 들어가야 한다.
+const DOC = /판결|판결문|약식|명령|결정문|선고|등본|정본|조서|공소장|소장|verdict|judg?ment|_doc|document/i;
+
 // 배경으로 쓸 만한 래스터 이미지 확장자만(svg/gif 제외 — 아이콘·애니 비중이 큼)
 const OKEXT = /\.(jpe?g|png|webp)(\?|#|$)/i;
+
+const safeDecode = (s) => {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+};
 
 /**
  * HTML 에서 배경 후보 이미지 URL 을 문서 순서대로 추출한다(절대경로로 변환).
@@ -26,7 +40,7 @@ export function extractImages(html, baseUrl) {
   const out = [];
   const seen = new Set();
 
-  const push = (raw) => {
+  const push = (raw, ctx) => {
     if (!raw) return;
     let u = String(raw).trim().replace(/&amp;/g, "&");
     if (!u || u.startsWith("data:")) return;
@@ -39,6 +53,9 @@ export function extractImages(html, baseUrl) {
     if (!/^https?:/i.test(abs)) return;
     if (!OKEXT.test(abs)) return;
     if (BAD.test(abs)) return;
+    // 판결문 등 문서 이미지는 배경에서 제외(파일명·alt 를 디코드해 검사)
+    const hay = safeDecode(abs) + " " + (ctx || "");
+    if (DOC.test(hay)) return;
     if (seen.has(abs)) return;
     seen.add(abs);
     out.push(abs);
@@ -47,13 +64,14 @@ export function extractImages(html, baseUrl) {
   // <img src>, data-src, data-original (지연로딩), 그리고 srcset 의 첫 후보
   const imgTags = src.match(/<img\b[^>]*>/gi) || [];
   for (const tag of imgTags) {
+    const alt = (tag.match(/\balt\s*=\s*["']([^"']*)["']/i) || [])[1] || "";
     const lazy =
       (tag.match(/\bdata-(?:src|original|lazy-src)\s*=\s*["']([^"']+)["']/i) || [])[1];
     const plain = (tag.match(/\bsrc\s*=\s*["']([^"']+)["']/i) || [])[1];
     const srcset = (tag.match(/\bsrcset\s*=\s*["']([^"']+)["']/i) || [])[1];
-    push(lazy);
-    push(plain);
-    if (srcset) push(srcset.split(",").pop().trim().split(/\s+/)[0]);
+    push(lazy, alt);
+    push(plain, alt);
+    if (srcset) push(srcset.split(",").pop().trim().split(/\s+/)[0], alt);
   }
 
   // og:image (대표 이미지) — 있으면 앞쪽 우선순위로
@@ -91,7 +109,9 @@ async function fetchOne(url, referer) {
   // 15KB 미만은 아이콘/썸네일일 가능성이 큼 / 6MB 초과는 과대(스킵)
   if (buf.length < 15 * 1024 || buf.length > 6 * 1024 * 1024) return null;
   const mime = ct.split(";")[0].trim();
-  return `data:${mime};base64,${buf.toString("base64")}`;
+  // 내용 해시: 같은 사진이 다른 URL 로 여러 번 실려도(로테이션 원인) 한 번만 쓰도록.
+  const hash = crypto.createHash("sha1").update(buf).digest("hex");
+  return { uri: `data:${mime};base64,${buf.toString("base64")}`, hash };
 }
 
 /**
@@ -103,12 +123,19 @@ async function fetchOne(url, referer) {
  * @returns {Promise<string[]>} data URI 배열
  */
 export async function fetchImages(urls, opts = {}) {
-  const cap = Math.max(1, Math.min(8, opts.cap || 4));
+  const cap = Math.max(1, Math.min(12, opts.cap || 10));
+  // 실패에 대비해 여유분까지 '병렬'로 받는다(순차보다 훨씬 빠름). 순서는 유지.
+  // 넉넉히 받아 '내용 중복'을 걸러도 cap 을 채울 수 있게 한다.
+  const tryList = urls.slice(0, cap + 14);
+  const results = await Promise.all(tryList.map((u) => fetchOne(u, opts.referer)));
   const out = [];
-  for (const u of urls) {
+  const seenHash = new Set();
+  for (const r of results) {
+    if (!r) continue;
+    if (seenHash.has(r.hash)) continue; // 같은 사진(내용 동일) 재사용 금지 → 로테이션 제거
+    seenHash.add(r.hash);
+    out.push(r.uri);
     if (out.length >= cap) break;
-    const uri = await fetchOne(u, opts.referer);
-    if (uri) out.push(uri);
   }
   return out;
 }
@@ -124,9 +151,11 @@ export async function fetchImages(urls, opts = {}) {
 export async function backgroundsFromSource(html, baseUrl, opts = {}) {
   const urls = extractImages(html, baseUrl);
   if (!urls.length) return {};
-  const imgs = await fetchImages(urls, { cap: opts.cap || 4, referer: baseUrl });
+  const imgs = await fetchImages(urls, { cap: opts.cap || 10, referer: baseUrl });
   if (!imgs.length) return {};
+  // 슬라이드마다 '서로 다른' 이미지 1장씩(중복 금지). 이미지가 모자란 칸은
+  // 배정하지 않아 build.mjs 가 CSS 배경으로 채운다(같은 이미지 반복 방지).
   const map = {};
-  for (let n = 1; n <= 10; n++) map[n] = imgs[(n - 1) % imgs.length];
+  for (let n = 1; n <= 10 && n <= imgs.length; n++) map[n] = imgs[n - 1];
   return map;
 }

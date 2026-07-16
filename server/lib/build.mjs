@@ -53,6 +53,17 @@ function headline(text, emphasis) {
 }
 const ml = (s) => esc(s).replace(/\n/g, "<br>");
 
+// 상세 본문: 문단(\n\n)·줄바꿈(\n)·강조(**말**) 지원. 강조는 마커펜 스타일.
+function richText(s) {
+  return String(s ?? "")
+    .split(/\n{2,}/)
+    .map((p) => {
+      const h = esc(p).replace(/\n/g, "<br>").replace(/\*\*(.+?)\*\*/g, '<b class="hl">$1</b>');
+      return `<p>${h}</p>`;
+    })
+    .join("");
+}
+
 function styleBlock() {
   const tpl = fs.readFileSync(path.join(ROOT, "template.html"), "utf8");
   const m = tpl.match(/<style>([\s\S]*?)<\/style>/i);
@@ -261,6 +272,41 @@ h1.xxs{font-size:calc(60px*var(--ts))}
 .stats strong{font-size:calc(40px*var(--ts))}
 .vs div{font-size:calc(34px*var(--ts))}
 .cover .quote{font-size:calc(36px*var(--ts))}
+
+/* 본문 카드는 세로 가운데 정렬(빈 여백을 위아래로 나눠 허전함을 줄인다).
+   표지(cover)·상담(cta)은 원래 배치 유지. 카드별로 편집에서 위/가운데/아래로 옮길 수 있다. */
+.slide:not(.cover):not(.cta):not(.detail) .body-area{justify-content:center}
+
+/* ── 상세(보험 카톡방) 버전 ── */
+.slide.detail .body-area{justify-content:center;gap:16px}
+/* 상세 본문 카드: 배경 사진은 '분위기 질감'으로만(아주 어둡게+블러) → 사진 속 글자가
+   본문 위로 겹쳐 보이지 않게 하고, 텍스트 패널만 또렷하게 읽히도록 한다.
+   (표지 detail-cover 는 글자가 적으므로 밝게 유지) */
+.slide.detail:not(.detail-cover) .bg.src{filter:brightness(.3) saturate(.85) blur(3px)}
+.slide.detail:not(.detail-cover) .scrim{background:linear-gradient(to bottom,
+  rgba(6,10,18,.74) 0%, rgba(6,10,18,.72) 50%, rgba(6,10,18,.84) 100%)}
+.slide.detail h1{font-size:calc(58px*var(--ts));line-height:1.16}
+.slide.detail h1.sm{font-size:calc(52px*var(--ts))}
+.slide.detail h1.xs{font-size:calc(46px*var(--ts))}
+.slide.detail h1.xxs{font-size:calc(42px*var(--ts))}
+/* 리드문: 카드 핵심 한 문장(마커 박스) — 사진 위에서도 읽히게 프로스티드 패널 */
+.dlead{font-size:calc(33px*var(--ts));font-weight:800;font-style:italic;color:var(--gold-hot);
+  line-height:1.42;padding:15px 20px;background:rgba(11,18,32,.62);border-left:4px solid var(--gold-hot);
+  border-radius:10px;text-shadow:none;backdrop-filter:blur(5px)}
+/* 상세 본문: 읽기 위한 반투명 패널(프로스티드) + 문단 */
+.dbody{font-size:calc(29px*var(--ts));line-height:1.6;color:var(--paper);
+  background:rgba(9,15,26,.68);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:20px 22px;
+  backdrop-filter:blur(6px);box-shadow:0 10px 40px rgba(0,0,0,.35)}
+.dbody p{margin:0 0 14px}.dbody p:last-child{margin:0}
+.dbody .hl{background:linear-gradient(transparent 56%,rgba(242,205,115,.45) 56%);
+  font-weight:800;color:#fff;padding:0 2px;border-radius:2px}
+/* 표지 부제(검색 pill) */
+.searchpill{display:flex;align-items:center;gap:14px;background:rgba(246,243,237,.95);color:#0A101C;
+  border-radius:999px;padding:15px 24px;font-size:calc(27px*var(--ts));font-weight:700;
+  box-shadow:0 8px 24px rgba(0,0,0,.35);max-width:100%}
+.searchpill span{flex:1;min-width:0}
+.searchpill .mag{flex:none;width:44px;height:44px;border-radius:50%;background:#16304F;color:#fff;
+  display:flex;align-items:center;justify-content:center;font-size:24px}
 `;
 
 function subClass(text) {
@@ -316,9 +362,9 @@ function slideCover(d, bgUri, kind) {
       ${top(1)}
       <div class="body-area">
         <div class="realcase">실제 성공사례</div>
-        <div class="kicker">${esc(d.category)}</div>
-        <h1 class="${coverClass(d.cover_h1)}">${headline(d.cover_h1, d.cover_h1_em)}</h1>
-        ${d.cover_quote ? `<p class="quote">${ml(d.cover_quote)}</p>` : ""}
+        <div class="kicker" data-f="category">${esc(d.category)}</div>
+        <h1 class="${coverClass(d.cover_h1)}" data-f="cover_h1">${headline(d.cover_h1, d.cover_h1_em)}</h1>
+        ${d.cover_quote ? `<p class="quote" data-f="cover_quote">${ml(d.cover_quote)}</p>` : ""}
       </div>
       <div class="foot"><div class="tag">실제 판결로 확인된 대응 전략</div><div class="swipe">넘겨서 보기 →</div></div>
     </div>
@@ -333,9 +379,9 @@ function slideText(n, d, tag, bgUri, kind) {
       ${top(n)}
       <div class="body-area">
         <div class="num">${String(n).padStart(2, "0")}</div>
-        <div class="kicker">${esc(d.kicker)}</div>
-        <h1 class="${h1Class(d.h1)}">${headline(d.h1, d.h1_em)}</h1>
-        ${d.sub ? `<p class="${subClass(d.sub)}">${ml(d.sub)}</p>` : ""}
+        <div class="kicker" data-f="s${n}.kicker">${esc(d.kicker)}</div>
+        <h1 class="${h1Class(d.h1)}" data-f="s${n}.h1">${headline(d.h1, d.h1_em)}</h1>
+        ${d.sub ? `<p class="${subClass(d.sub)}" data-f="s${n}.sub">${ml(d.sub)}</p>` : ""}
         <div class="bar"></div>
       </div>
       <div class="foot"><div class="tag">${esc(tag || "")}</div><div class="swipe">→</div></div>
@@ -350,12 +396,12 @@ function slideVs(d, bgUri, kind) {
     <div class="inner">
       ${top(5)}
       <div class="body-area">
-        <div class="kicker">${esc(d.kicker)}</div>
-        <h1 class="xs">${headline(d.h1, d.h1_em)}</h1>
+        <div class="kicker" data-f="s5.kicker">${esc(d.kicker)}</div>
+        <h1 class="xs" data-f="s5.h1">${headline(d.h1, d.h1_em)}</h1>
         <div class="vs">
-          <div class="a">${esc(d.vs_a_title)}<br><span style="font-size:26px;font-weight:400">${esc(d.vs_a_desc)}</span></div>
+          <div class="a" data-f="s5.vs_a_title">${esc(d.vs_a_title)}<br><span style="font-size:26px;font-weight:400" data-f="s5.vs_a_desc">${esc(d.vs_a_desc)}</span></div>
           <div class="arrow">▼</div>
-          <div class="b">${esc(d.vs_b_title)}<br><span style="font-size:26px;font-weight:400">${esc(d.vs_b_desc)}</span></div>
+          <div class="b" data-f="s5.vs_b_title">${esc(d.vs_b_title)}<br><span style="font-size:26px;font-weight:400" data-f="s5.vs_b_desc">${esc(d.vs_b_desc)}</span></div>
         </div>
       </div>
       <div class="foot"><div class="tag">조문은 하나가 아닙니다</div><div class="swipe">→</div></div>
@@ -367,7 +413,7 @@ function slideStats(d, bgUri, kind) {
   const stats = Array.isArray(d.stats) ? d.stats.slice(0, 3) : [];
   const statsHtml = stats.length
     ? `<div class="stats">${stats
-        .map((s) => `<div><span>${esc(s.label)}</span><strong>${esc(s.value)}</strong></div>`)
+        .map((s, i) => `<div><span data-f="s6.stats.${i}.label">${esc(s.label)}</span><strong data-f="s6.stats.${i}.value">${esc(s.value)}</strong></div>`)
         .join("")}</div>`
     : "";
   return `
@@ -377,9 +423,9 @@ function slideStats(d, bgUri, kind) {
     <div class="inner">
       ${top(6)}
       <div class="body-area">
-        <div class="kicker">${esc(d.kicker)}</div>
-        <h1 class="xs">${headline(d.h1, d.h1_em)}</h1>
-        ${d.sub ? `<p class="sub small">${ml(d.sub)}</p>` : ""}
+        <div class="kicker" data-f="s6.kicker">${esc(d.kicker)}</div>
+        <h1 class="xs" data-f="s6.h1">${headline(d.h1, d.h1_em)}</h1>
+        ${d.sub ? `<p class="sub small" data-f="s6.sub">${ml(d.sub)}</p>` : ""}
         ${statsHtml}
       </div>
       <div class="foot"><div class="tag">해당 사건의 법원 판단 결과</div><div class="swipe">→</div></div>
@@ -391,8 +437,8 @@ function slideCards(d, bgUri, kind) {
   const cards = (Array.isArray(d.cards) ? d.cards.slice(0, 3) : [])
     .map(
       (c, i) =>
-        `<div class="card"><b>${i + 1}</b><p>${esc(c.title)}${
-          c.desc ? `<small>${esc(c.desc)}</small>` : ""
+        `<div class="card"><b>${i + 1}</b><p data-f="s7.cards.${i}.title">${esc(c.title)}${
+          c.desc ? `<small data-f="s7.cards.${i}.desc">${esc(c.desc)}</small>` : ""
         }</p></div>`
     )
     .join("");
@@ -402,8 +448,8 @@ function slideCards(d, bgUri, kind) {
     <div class="inner">
       ${top(7)}
       <div class="body-area">
-        <div class="kicker">${esc(d.kicker)}</div>
-        <h1 class="xs">${headline(d.h1, d.h1_em)}</h1>
+        <div class="kicker" data-f="s7.kicker">${esc(d.kicker)}</div>
+        <h1 class="xs" data-f="s7.h1">${headline(d.h1, d.h1_em)}</h1>
         <div class="cards">${cards}</div>
       </div>
       <div class="foot"><div class="tag">실무에서 자주 쓰이는 자료</div><div class="swipe">→</div></div>
@@ -413,7 +459,7 @@ function slideCards(d, bgUri, kind) {
 
 function slideChecklist(d, bgUri, kind) {
   const checks = (Array.isArray(d.checks) ? d.checks.slice(0, 4) : [])
-    .map((c, i) => `<div class="card"><b>${i + 1}</b><p>${esc(c)}</p></div>`)
+    .map((c, i) => `<div class="card"><b>${i + 1}</b><p data-f="s9.checks.${i}">${esc(c)}</p></div>`)
     .join("");
   return `
   <section class="slide" data-n="09">
@@ -422,8 +468,8 @@ function slideChecklist(d, bgUri, kind) {
     <div class="inner">
       ${top(9)}
       <div class="body-area">
-        <div class="kicker">${esc(d.kicker)}</div>
-        <h1 class="xs">${headline(d.h1, d.h1_em)}</h1>
+        <div class="kicker" data-f="s9.kicker">${esc(d.kicker)}</div>
+        <h1 class="xs" data-f="s9.h1">${headline(d.h1, d.h1_em)}</h1>
         <div class="cards">${checks}</div>
       </div>
       <div class="foot"><div class="tag">캡처해서 보관하세요</div><div class="swipe">→</div></div>
@@ -483,7 +529,7 @@ function slideCta(lawyer, ctaH1, ctaH1Em, bgUri, kind, pageNum) {
         </div>
       </div>
       <div class="body-area">
-        <h1 class="${h1Class(h1)}">${headline(h1, em)}</h1>
+        <h1 class="${h1Class(h1)}" data-f="cta_h1">${headline(h1, em)}</h1>
         <a class="phone" href="tel:0${PHONE.replace(/-/g, "")}" style="text-decoration:none">
           <span>법률 상담 문의</span>
           <strong>${PHONE}</strong>
@@ -495,12 +541,131 @@ function slideCta(lawyer, ctaH1, ctaH1Em, bgUri, kind, pageNum) {
   </section>`;
 }
 
+// ── 상세(보험 카톡방) 버전 슬라이드 ──────────────────────────────────────
+function slideCoverDetail(d, bgUri, kind) {
+  return `
+  <section class="slide cover detail-cover" data-n="01">
+    ${bg(0, bgUri, kind)}
+    <div class="inner">
+      ${top(1)}
+      <div class="body-area">
+        <div class="realcase">보험 실무 자료</div>
+        <div class="kicker" data-f="category">${esc(d.category)}</div>
+        <h1 class="${coverClass(d.cover_h1)}" data-f="cover_h1">${headline(d.cover_h1, d.cover_h1_em)}</h1>
+        ${d.cover_sub ? `<div class="searchpill" data-f="cover_sub"><span>${esc(d.cover_sub)}</span><i class="mag">⌕</i></div>` : ""}
+      </div>
+      <div class="foot"><div class="tag">여온 법률정보 · 실무 참고용</div><div class="swipe">넘겨서 보기 →</div></div>
+    </div>
+  </section>`;
+}
+
+function slideDetail(n, sec, bgUri, kind, i) {
+  const lead = sec.lead ? `<p class="dlead" data-f="sections.${i}.lead">${esc(sec.lead)}</p>` : "";
+  const body = sec.body ? `<div class="dbody" data-f="sections.${i}.body">${richText(sec.body)}</div>` : "";
+  return `
+  <section class="slide detail" data-n="${String(n).padStart(2, "0")}">
+    ${bg(n, bgUri, kind)}
+    <div class="inner">
+      ${top(n)}
+      <div class="body-area">
+        <h1 class="${h1Class(sec.h1)}" data-f="sections.${i}.h1">${headline(sec.h1, sec.h1_em)}</h1>
+        ${lead}
+        ${body}
+      </div>
+      <div class="foot"><div class="tag">여온 법률정보</div><div class="swipe">→</div></div>
+    </div>
+  </section>`;
+}
+
+// 편집 스타일(로고·전체/카드별 배율·필드 px) → CSS. buildHtml/buildHtmlDetail 공용.
+// dnMap: 논리키(cover,s2..,cta) → 실제 data-n. 카드별 배율(--ts)에 쓴다.
+function styleOverrides(d, dnMap) {
+  const St = d.style || {};
+  let css = "";
+  const logoH = Number(St.logo);
+  if (Number.isFinite(logoH) && logoH >= 30 && logoH <= 160)
+    css += `.top .logo{height:${Math.round(logoH)}px;max-width:${Math.round(logoH * 7)}px}`;
+  const ts = Number(St.textScale);
+  if (Number.isFinite(ts) && ts >= 0.8 && ts <= 1.4) css += `:root{--ts:${ts}}`;
+  const scale = (St.slideScale && typeof St.slideScale === "object") ? St.slideScale : {};
+  for (const [key, d2] of Object.entries(dnMap)) {
+    const v = Number(scale[key]);
+    if (Number.isFinite(v) && v >= 0.6 && v <= 1.8) css += `.stage .slide[data-n="${d2}"]{--ts:${v}}`;
+  }
+  const fpx = (St.fontPx && typeof St.fontPx === "object") ? St.fontPx : {};
+  for (const [key, raw] of Object.entries(fpx)) {
+    const v = Number(raw);
+    if (!Number.isFinite(v) || v < 10 || v > 240) continue;
+    const safeKey = String(key).replace(/["\\]/g, "");
+    const sel = /_em$/.test(safeKey)
+      ? `.stage [data-f="${safeKey.replace(/_em$/, "")}"] em`
+      : `.stage [data-f="${safeKey}"]`;
+    css += `${sel}{font-size:${Math.round(v)}px !important}`;
+  }
+  // 카드별 상하 위치(위/가운데/아래). 편집에서 카드를 옮길 때 쓴다.
+  const ALIGN_CSS = { top: "flex-start", center: "center", bottom: "flex-end" };
+  const align = (St.align && typeof St.align === "object") ? St.align : {};
+  for (const [key, d2] of Object.entries(dnMap)) {
+    const a = ALIGN_CSS[align[key]];
+    if (a) css += `.stage .slide[data-n="${d2}"] .body-area{justify-content:${a} !important}`;
+  }
+  return css;
+}
+
+function wrapDocument(d, slidesHtml, dnMap) {
+  const styleCss = styleOverrides(d, dnMap);
+  return `<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${BRAND} 카드뉴스 — ${esc(d.category || "")}</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+<style>${styleBlock()}
+${REFINE}
+${styleCss}</style>
+</head>
+<body>
+<div class="stage" id="stage">
+${slidesHtml}
+</div>
+</body>
+</html>
+`;
+}
+
+// 상세 버전: 표지 + 본문 카드(sections) + (선택)판결문 + 상담 안내.
+function buildHtmlDetail(d) {
+  const B = d.bg || {};
+  const K = d.bgKind || "ai";
+  const secs = Array.isArray(d.sections) ? d.sections.slice(0, 8) : [];
+  const hasV = d.verdict && d.verdict.uri;
+  _total = 1 + secs.length + (hasV ? 1 : 0) + 1;
+  const dn = { cover: "01" };
+  const list = [slideCoverDetail(d, B[1], K)];
+  let n = 2;
+  secs.forEach((sec, i) => {
+    dn[`sec${i}`] = String(n).padStart(2, "0");
+    list.push(slideDetail(n, sec, B[n], K, i));
+    n += 1;
+  });
+  if (hasV) {
+    dn.verdict = String(n).padStart(2, "0");
+    list.push(slideVerdict(d.verdict, n));
+    n += 1;
+  }
+  dn.cta = String(n).padStart(2, "0");
+  list.push(slideCta(d.lawyer, d.cta_h1, d.cta_h1_em, B[n], K, n));
+  return wrapDocument(d, list.join("\n"), dn);
+}
+
 /**
  * 슬라이드 데이터 → 완성 HTML 문자열
  * @param {object} d 생성 엔진이 만든 슬라이드 데이터
  * @returns {string} index.html 내용
  */
 export function buildHtml(d) {
+  if (d.mode === "detail") return buildHtmlDetail(d);
   const B = d.bg || {}; // { 1: dataUri, ... } — 배경 이미지(선택). 없으면 CSS 메쉬.
   const K = d.bgKind || "ai"; // "src"=원문 사진 | "ai"=AI 생성
   const hasV = d.verdict && d.verdict.uri; // 판결문/증거 카드(선택)
@@ -524,46 +689,21 @@ export function buildHtml(d) {
     pg = 11;
   }
   list.push(slideCta(d.lawyer, d.cta_h1, d.cta_h1_em, B[10], K, pg));
-  const slides = list.join("\n");
 
-  // 편집에서 고른 스타일(로고 크기·전체 글자 크기·카드별 글자 크기) 반영.
-  const St = d.style || {};
-  let styleCss = "";
-  const logoH = Number(St.logo);
-  if (Number.isFinite(logoH) && logoH >= 30 && logoH <= 160)
-    styleCss += `.top .logo{height:${Math.round(logoH)}px;max-width:${Math.round(logoH * 7)}px}`;
-  const ts = Number(St.textScale);
-  if (Number.isFinite(ts) && ts >= 0.8 && ts <= 1.4) styleCss += `:root{--ts:${ts}}`;
-
-  // 카드별 글자 크기: --ts 를 해당 슬라이드에만 덮어써 그 카드의 모든 글자를 키우거나 줄인다.
-  // 논리 키(cover, s2..s9, verdict, cta) → 실제 data-n 으로 매핑(판결문 삽입에 따라 페이지 번호가 바뀌어도 안전).
-  const scale = (St.slideScale && typeof St.slideScale === "object") ? St.slideScale : {};
   const dn = { cover: "01", s2: "02", s3: "03", s4: "04", s5: "05", s6: "06", s7: "07", s8: "08", s9: "09" };
   if (verdictN) dn.verdict = String(verdictN).padStart(2, "0");
   dn.cta = String(pg).padStart(2, "0");
-  for (const [key, d2] of Object.entries(dn)) {
-    const v = Number(scale[key]);
-    if (Number.isFinite(v) && v >= 0.6 && v <= 1.8) styleCss += `.stage .slide[data-n="${d2}"]{--ts:${v}}`;
-  }
+  return wrapDocument(d, list.join("\n"), dn);
+}
 
-  return `<!DOCTYPE html>
-<html lang="ko">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>${BRAND} 카드뉴스 — ${esc(d.category || "")}</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
-<style>${styleBlock()}
-${REFINE}
-${styleCss}</style>
-</head>
-<body>
-<div class="stage" id="stage">
-${slides}
-</div>
-</body>
-</html>
-`;
+// 총 카드 수(판결문 포함). SNS=10(+판결문 11) / 상세=표지+본문(5~8)+(판결문)+상담.
+export function cardCountOf(d) {
+  const hasV = d && d.verdict && d.verdict.uri;
+  if (d && d.mode === "detail") {
+    const secN = Array.isArray(d.sections) ? Math.min(8, d.sections.length) : 0;
+    return 1 + secN + (hasV ? 1 : 0) + 1;
+  }
+  return hasV ? 11 : 10;
 }
 
 export const FIXED = { BRAND, PHONE, AD_OFFICER, DISCLAIMER, LAWYERS: Object.keys(LAWYER_FILES) };
