@@ -24,6 +24,31 @@ const LAWYER_FILES = {
   김선호: "김선호_변호사.png",
 };
 
+// 카드에 고정 노출되던 라벨류 문구(뱃지·하단 태그 등) 기본값. data.chrome 로 편집 가능.
+// 상담번호·광고책임변호사 표기·면책 문구는 광고 규정상 절대 고정이므로 여기 포함하지 않는다.
+const CHROME_DEFAULTS = {
+  coverBadge: "실제 성공사례",
+  coverTag: "실제 판결로 확인된 대응 전략",
+  tagS2: "여온의 이야기 · 성공사례",
+  tagS3: "문제 정의",
+  tagS4: "정황 증거의 힘",
+  tagS5: "조문은 하나가 아닙니다",
+  tagS6: "해당 사건의 법원 판단 결과",
+  tagS7: "실무에서 자주 쓰이는 자료",
+  tagS8: "가장 중요한 문장",
+  tagS9: "캡처해서 보관하세요",
+  statsBadge: "저장 포인트",
+  checklistBadge: "저장해두기",
+  ctaLabel: "이 사례를 검토한 변호사",
+  ctaCaseTag: "가사 · 이혼 사건",
+  ctaPhoneLabel: "법률 상담 문의",
+  ctaPhoneSub: "서울 주사무소 · 카카오톡 1:1 상담 가능",
+};
+function chromeText(d, key) {
+  const v = d && d.chrome && d.chrome[key];
+  return typeof v === "string" && v.trim() ? v : CHROME_DEFAULTS[key];
+}
+
 // --- 유틸 ---
 const esc = (s) =>
   String(s ?? "")
@@ -209,10 +234,6 @@ h1 .u{background:linear-gradient(transparent 60%,rgba(242,205,115,.4) 60%)}
   color:#0A101C;background:var(--gold-hot);padding:9px 18px;border-radius:8px;margin-bottom:18px;
   box-shadow:0 6px 20px rgba(0,0,0,.35)}
 
-/* 상담 슬라이드 로고(‘법무법인 여온’ 표기 대체) */
-.lawyer .meta small .meta-logo{height:26px;width:auto;max-width:250px;display:block;margin:0 0 6px;
-  filter:drop-shadow(0 1px 6px rgba(0,0,0,.35))}
-
 /* 판결문 카드(첨부한 실제 판결문을 문서처럼 보여준다) */
 .slide.verdict{background:#0b1220}
 .slide.verdict .vbg{position:absolute;inset:0;z-index:0;background:radial-gradient(120% 90% at 50% 0%,#1a3556 0%,#0A101C 68%)}
@@ -231,7 +252,13 @@ h1 .u{background:linear-gradient(transparent 60%,rgba(242,205,115,.4) 60%)}
 /* 카드·스탯 포인트 색 강화. */
 .card b{background:var(--gold-hot)}
 .stats strong{line-height:1.2;color:var(--gold-hot)}
-.vs .b{background:rgba(242,205,115,.16);border-color:rgba(242,205,115,.5)}
+
+/* 법리 대비 박스(.vs .a/.b): 원본은 흰색·금색을 살짝만 입힌 반투명이라, 뒤에 사진
+   배경(특히 밝은 사진)이 있으면 박스가 하얗게 씻겨나가 글자가 안 보인다. 사진 유무와
+   무관하게 항상 또렷하도록 어둡게 깔고 블러 처리한다(뒷 배경이 그대로 비치지 않게). */
+.vs .a{background:rgba(6,10,18,.62);border-color:rgba(255,255,255,.16);
+  color:rgba(246,243,237,.78);backdrop-filter:blur(5px)}
+.vs .b{background:rgba(6,10,18,.5);border-color:rgba(242,205,115,.6);backdrop-filter:blur(5px)}
 
 .sub{text-wrap:pretty}
 .sub.tight{font-size:33px;line-height:1.55}
@@ -361,12 +388,12 @@ function slideCover(d, bgUri, kind) {
     <div class="inner">
       ${top(1)}
       <div class="body-area">
-        <div class="realcase">실제 성공사례</div>
+        <div class="realcase" data-f="chrome.coverBadge">${esc(chromeText(d, "coverBadge"))}</div>
         <div class="kicker" data-f="category">${esc(d.category)}</div>
         <h1 class="${coverClass(d.cover_h1)}" data-f="cover_h1">${headline(d.cover_h1, d.cover_h1_em)}</h1>
         ${d.cover_quote ? `<p class="quote" data-f="cover_quote">${ml(d.cover_quote)}</p>` : ""}
       </div>
-      <div class="foot"><div class="tag">실제 판결로 확인된 대응 전략</div><div class="swipe">넘겨서 보기 →</div></div>
+      <div class="foot"><div class="tag" data-f="chrome.coverTag">${esc(chromeText(d, "coverTag"))}</div><div class="swipe">넘겨서 보기 →</div></div>
     </div>
   </section>`;
 }
@@ -384,12 +411,12 @@ function slideText(n, d, tag, bgUri, kind) {
         ${d.sub ? `<p class="${subClass(d.sub)}" data-f="s${n}.sub">${ml(d.sub)}</p>` : ""}
         <div class="bar"></div>
       </div>
-      <div class="foot"><div class="tag">${esc(tag || "")}</div><div class="swipe">→</div></div>
+      <div class="foot"><div class="tag" data-f="chrome.tagS${n}">${esc(tag || "")}</div><div class="swipe">→</div></div>
     </div>
   </section>`;
 }
 
-function slideVs(d, bgUri, kind) {
+function slideVs(d, bgUri, kind, tag) {
   return `
   <section class="slide" data-n="05">
     ${bg(5, bgUri, kind)}
@@ -404,12 +431,12 @@ function slideVs(d, bgUri, kind) {
           <div class="b" data-f="s5.vs_b_title">${esc(d.vs_b_title)}<br><span style="font-size:26px;font-weight:400" data-f="s5.vs_b_desc">${esc(d.vs_b_desc)}</span></div>
         </div>
       </div>
-      <div class="foot"><div class="tag">조문은 하나가 아닙니다</div><div class="swipe">→</div></div>
+      <div class="foot"><div class="tag" data-f="chrome.tagS5">${esc(tag || "")}</div><div class="swipe">→</div></div>
     </div>
   </section>`;
 }
 
-function slideStats(d, bgUri, kind) {
+function slideStats(d, bgUri, kind, saveLabel, tag) {
   const stats = Array.isArray(d.stats) ? d.stats.slice(0, 3) : [];
   const statsHtml = stats.length
     ? `<div class="stats">${stats
@@ -419,7 +446,7 @@ function slideStats(d, bgUri, kind) {
   return `
   <section class="slide" data-n="06">
     ${bg(6, bgUri, kind)}
-    <div class="save">저장 포인트</div>
+    <div class="save" data-f="chrome.statsBadge">${esc(saveLabel)}</div>
     <div class="inner">
       ${top(6)}
       <div class="body-area">
@@ -428,12 +455,12 @@ function slideStats(d, bgUri, kind) {
         ${d.sub ? `<p class="sub small" data-f="s6.sub">${ml(d.sub)}</p>` : ""}
         ${statsHtml}
       </div>
-      <div class="foot"><div class="tag">해당 사건의 법원 판단 결과</div><div class="swipe">→</div></div>
+      <div class="foot"><div class="tag" data-f="chrome.tagS6">${esc(tag || "")}</div><div class="swipe">→</div></div>
     </div>
   </section>`;
 }
 
-function slideCards(d, bgUri, kind) {
+function slideCards(d, bgUri, kind, tag) {
   const cards = (Array.isArray(d.cards) ? d.cards.slice(0, 3) : [])
     .map(
       (c, i) =>
@@ -452,19 +479,19 @@ function slideCards(d, bgUri, kind) {
         <h1 class="xs" data-f="s7.h1">${headline(d.h1, d.h1_em)}</h1>
         <div class="cards">${cards}</div>
       </div>
-      <div class="foot"><div class="tag">실무에서 자주 쓰이는 자료</div><div class="swipe">→</div></div>
+      <div class="foot"><div class="tag" data-f="chrome.tagS7">${esc(tag || "")}</div><div class="swipe">→</div></div>
     </div>
   </section>`;
 }
 
-function slideChecklist(d, bgUri, kind) {
+function slideChecklist(d, bgUri, kind, saveLabel, tag) {
   const checks = (Array.isArray(d.checks) ? d.checks.slice(0, 4) : [])
     .map((c, i) => `<div class="card"><b>${i + 1}</b><p data-f="s9.checks.${i}">${esc(c)}</p></div>`)
     .join("");
   return `
   <section class="slide" data-n="09">
     ${bg(9, bgUri, kind)}
-    <div class="save">저장해두기</div>
+    <div class="save" data-f="chrome.checklistBadge">${esc(saveLabel)}</div>
     <div class="inner">
       ${top(9)}
       <div class="body-area">
@@ -472,7 +499,7 @@ function slideChecklist(d, bgUri, kind) {
         <h1 class="xs" data-f="s9.h1">${headline(d.h1, d.h1_em)}</h1>
         <div class="cards">${checks}</div>
       </div>
-      <div class="foot"><div class="tag">캡처해서 보관하세요</div><div class="swipe">→</div></div>
+      <div class="foot"><div class="tag" data-f="chrome.tagS9">${esc(tag || "")}</div><div class="swipe">→</div></div>
     </div>
   </section>`;
 }
@@ -507,14 +534,16 @@ function slideVerdict(v, pageNum) {
   </section>`;
 }
 
-// 마지막: 상담 안내 — 고정. 검토 변호사 이름/사진만 주입.
-function slideCta(lawyer, ctaH1, ctaH1Em, bgUri, kind, pageNum) {
+// 마지막: 상담 안내 — 상담번호·면책문구·광고책임변호사 표기·변호사 사진만 고정.
+// 그 외 라벨(검토 변호사 안내문·사건유형 태그·상담 라벨 등)은 chrome 로 편집 가능.
+function slideCta(lawyer, ctaH1, ctaH1Em, bgUri, kind, pageNum, d) {
   const img = lawyerImageDataUri(lawyer);
   const h1 = ctaH1 || "혼자 감당하지 말고\n먼저 물어보세요";
   const em = ctaH1Em || "먼저";
-  // '법무법인 여온' 표기는 로고가 있으면 로고 이미지로, 없으면 텍스트로.
-  const logo = logoDataUri();
-  const brandMark = logo ? `<img class="meta-logo" alt="${esc(BRAND)}" src="${logo}" />` : esc(BRAND);
+  const label = chromeText(d, "ctaLabel");
+  const caseTag = chromeText(d, "ctaCaseTag");
+  const phoneLabel = chromeText(d, "ctaPhoneLabel");
+  const phoneSub = chromeText(d, "ctaPhoneSub");
   return `
   <section class="slide cta" data-n="${String(pageNum).padStart(2, "0")}">
     ${bg(10, bgUri, kind)}
@@ -523,17 +552,17 @@ function slideCta(lawyer, ctaH1, ctaH1Em, bgUri, kind, pageNum) {
       <div class="lawyer">
         <img alt="${esc(lawyer)} 변호사" src="${img}" />
         <div class="meta">
-          <em>이 사례를 검토한 변호사</em>
+          <em data-f="chrome.ctaLabel">${esc(label)}</em>
           <strong>${esc(lawyer)} 변호사</strong>
-          <small>${brandMark}<br>가사 · 이혼 사건</small>
+          <small data-f="chrome.ctaCaseTag">${esc(caseTag)}</small>
         </div>
       </div>
       <div class="body-area">
         <h1 class="${h1Class(h1)}" data-f="cta_h1">${headline(h1, em)}</h1>
         <a class="phone" href="tel:0${PHONE.replace(/-/g, "")}" style="text-decoration:none">
-          <span>법률 상담 문의</span>
+          <span data-f="chrome.ctaPhoneLabel">${esc(phoneLabel)}</span>
           <strong>${PHONE}</strong>
-          <small>서울 주사무소 · 카카오톡 1:1 상담 가능</small>
+          <small data-f="chrome.ctaPhoneSub">${esc(phoneSub)}</small>
         </a>
         <p class="disc">${esc(DISCLAIMER)} · ${BRAND} · 광고책임변호사 ${AD_OFFICER}</p>
       </div>
@@ -656,7 +685,7 @@ function buildHtmlDetail(d) {
     n += 1;
   }
   dn.cta = String(n).padStart(2, "0");
-  list.push(slideCta(d.lawyer, d.cta_h1, d.cta_h1_em, ...imgOf(d, "cta", B[n], K), n));
+  list.push(slideCta(d.lawyer, d.cta_h1, d.cta_h1_em, ...imgOf(d, "cta", B[n], K), n, d));
   return wrapDocument(d, list.join("\n"), dn);
 }
 
@@ -682,14 +711,14 @@ export function buildHtml(d) {
   _total = hasV ? 11 : 10; // 페이지 번호 분모(top)
   const list = [
     slideCover(d, ...imgOf(d, "cover", B[1], K)),
-    slideText(2, d.s2, "여온의 이야기 · 성공사례", ...imgOf(d, "s2", B[2], K)),
-    slideText(3, d.s3, "문제 정의", ...imgOf(d, "s3", B[3], K)),
-    slideText(4, d.s4, "정황 증거의 힘", ...imgOf(d, "s4", B[4], K)),
-    slideVs(d.s5, ...imgOf(d, "s5", B[5], K)),
-    slideStats(d.s6, ...imgOf(d, "s6", B[6], K)),
-    slideCards(d.s7, ...imgOf(d, "s7", B[7], K)),
-    slideText(8, d.s8, "가장 중요한 문장", ...imgOf(d, "s8", B[8], K)),
-    slideChecklist(d.s9, ...imgOf(d, "s9", B[9], K)),
+    slideText(2, d.s2, chromeText(d, "tagS2"), ...imgOf(d, "s2", B[2], K)),
+    slideText(3, d.s3, chromeText(d, "tagS3"), ...imgOf(d, "s3", B[3], K)),
+    slideText(4, d.s4, chromeText(d, "tagS4"), ...imgOf(d, "s4", B[4], K)),
+    slideVs(d.s5, ...imgOf(d, "s5", B[5], K), chromeText(d, "tagS5")),
+    slideStats(d.s6, ...imgOf(d, "s6", B[6], K), chromeText(d, "statsBadge"), chromeText(d, "tagS6")),
+    slideCards(d.s7, ...imgOf(d, "s7", B[7], K), chromeText(d, "tagS7")),
+    slideText(8, d.s8, chromeText(d, "tagS8"), ...imgOf(d, "s8", B[8], K)),
+    slideChecklist(d.s9, ...imgOf(d, "s9", B[9], K), chromeText(d, "checklistBadge"), chromeText(d, "tagS9")),
   ];
   let pg = 10;
   let verdictN = null;
@@ -698,7 +727,7 @@ export function buildHtml(d) {
     list.push(slideVerdict(d.verdict, 10));
     pg = 11;
   }
-  list.push(slideCta(d.lawyer, d.cta_h1, d.cta_h1_em, ...imgOf(d, "cta", B[10], K), pg));
+  list.push(slideCta(d.lawyer, d.cta_h1, d.cta_h1_em, ...imgOf(d, "cta", B[10], K), pg, d));
 
   const dn = { cover: "01", s2: "02", s3: "03", s4: "04", s5: "05", s6: "06", s7: "07", s8: "08", s9: "09" };
   if (verdictN) dn.verdict = String(verdictN).padStart(2, "0");

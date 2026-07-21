@@ -89,6 +89,13 @@ const EDIT_TEXT = ["category", "cover_h1", "cover_h1_em", "cover_quote", "cover_
 const EDIT_SLIDES = ["s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9"];
 const EDIT_SLIDE_TEXT = ["kicker", "h1", "h1_em", "sub", "vs_a_title", "vs_a_desc", "vs_b_title", "vs_b_desc"];
 
+// 카드에 고정 노출되던 라벨류 문구(뱃지·하단 태그 등) 편집 화이트리스트.
+// 상담번호·광고책임변호사 표기·면책 문구는 광고 규정상 절대 편집 대상이 아니므로 제외.
+const CHROME_KEYS = [
+  "coverBadge", "coverTag", "tagS2", "tagS3", "tagS4", "tagS5", "tagS6", "tagS7", "tagS8", "tagS9",
+  "statsBadge", "checklistBadge", "ctaLabel", "ctaCaseTag", "ctaPhoneLabel", "ctaPhoneSub",
+];
+
 export function applyEditablePatch(data, patch) {
   if (!patch || typeof patch !== "object") return data;
   const str = (v) => String(v ?? "");
@@ -98,6 +105,17 @@ export function applyEditablePatch(data, patch) {
   if (LAWYERS.includes(patch.lawyer)) {
     data.lawyer = patch.lawyer;
     data.lawyerAuto = false;
+  }
+
+  // 카드 공통 문구(뱃지·하단 태그 등). 빈 값이면 기본값으로 되돌린다(60자 제한).
+  if (patch.chrome && typeof patch.chrome === "object") {
+    data.chrome = data.chrome || {};
+    for (const k of CHROME_KEYS) {
+      if (!(k in patch.chrome)) continue;
+      const v = str(patch.chrome[k]).slice(0, 60).trim();
+      if (v) data.chrome[k] = v;
+      else delete data.chrome[k];
+    }
   }
 
   // 스타일(현재는 로고 크기). "" 이면 기본값으로 되돌린다.
@@ -254,7 +272,6 @@ function writeReview(dir, data, meta) {
  * @returns {Promise<object>} { dir, relDir, id, date, lawyer, cards, caption, review, source }
  */
 export async function runPipeline(input) {
-  const mode = input.mode === "detail" ? "detail" : "sns";
   let articleText;
   let articleHtml = null; // 원문 HTML(있으면 배경 이미지 추출에 사용)
   let key;
@@ -263,6 +280,8 @@ export async function runPipeline(input) {
   let source;
   let urlForRecord = null;
   let title = null;
+  // 버전(SNS/상세)을 중복키·초안 id 에 반영 → 같은 URL 을 두 버전으로 각각 만들 수 있다.
+  const mode = input.mode === "detail" ? "detail" : "sns";
 
   if (input.type === "queue") {
     const item = nextQueueItem();
@@ -272,7 +291,7 @@ export async function runPipeline(input) {
       throw err;
     }
     key = normalizeUrl(item.url) + "_" + mode;
-    id = String(item.id);
+    id = String(item.id) + "-" + mode;
     dateStr = item.date || dateStr;
     urlForRecord = item.url;
     source = `큐 #${item.id} · ${item.url}`;
@@ -283,26 +302,27 @@ export async function runPipeline(input) {
     if (!url) throw new Error("URL이 비어 있습니다.");
     key = normalizeUrl(url) + "_" + mode;
     if (isUsed(key)) {
-      const err = new Error("이미 사용한 URL입니다. 한번 사용한 주소는 다시 쓸 수 없습니다.");
+      const err = new Error("이미 이 버전으로 만든 URL입니다. (같은 URL이라도 SNS·보험용은 각각 한 번씩 가능)");
       err.code = "ALREADY_USED";
       throw err;
     }
     urlForRecord = url;
     const tail = (url.match(/(\d+)\/?$/) || [])[1];
-    id = tail || "url" + Date.now().toString().slice(-6);
+    id = (tail || "url" + Date.now().toString().slice(-6)) + "-" + mode;
     source = url;
     title = tail ? `성공사례 ${tail}` : "직접 첨부 URL";
     ({ text: articleText, html: articleHtml } = await fetchArticle(url));
   } else if (input.type === "manuscript") {
     articleText = String(input.manuscript || "").trim();
     if (!articleText) throw new Error("원고가 비어 있습니다.");
-    key = manuscriptKey(articleText) + "_" + mode;
+    const base = manuscriptKey(articleText);
+    key = base + "_" + mode;
     if (isUsed(key)) {
-      const err = new Error("이미 사용한 원고입니다. 같은 글은 다시 생성할 수 없습니다.");
+      const err = new Error("이미 이 버전으로 만든 원고입니다. (같은 글이라도 SNS·보험용은 각각 한 번씩 가능)");
       err.code = "ALREADY_USED";
       throw err;
     }
-    id = "ms" + key.slice(3, 9);
+    id = "ms" + base.slice(3, 9) + "-" + mode;
     source = "직접 첨부 원고";
     title = "직접 첨부 원고";
   } else {
