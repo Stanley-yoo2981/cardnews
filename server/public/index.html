@@ -683,8 +683,12 @@ function applyLive(){
   let st=doc.getElementById("liveOverrides");
   if(!st){st=doc.createElement("style");st.id="liveOverrides";doc.head.appendChild(st);}
   st.textContent=liveCssText();
-  fillPxPlaceholders();
 }
+// 타자 중엔 매번 반영하지 않고, 입력이 잠깐 멈춘 뒤 한 번만 반영(버벅임 방지).
+let _liveT=null;
+function applyLiveDebounced(){ if(_liveT)clearTimeout(_liveT); _liveT=setTimeout(applyLive,120); }
+let _phT=null;
+function fillPxPlaceholdersDebounced(){ if(_phT)clearTimeout(_phT); _phT=setTimeout(fillPxPlaceholders,160); }
 // 각 px 칸에 '현재 크기'를 placeholder 로 보여준다(비어 있을 때만 노출).
 function fillPxPlaceholders(){
   const doc=epDoc(); if(!doc)return;
@@ -702,7 +706,7 @@ function onEpLoad(){
   let n=doc.getElementById("epNorm");
   if(!n){n=doc.createElement("style");n.id="epNorm";doc.head.appendChild(n);}
   n.textContent="html{scrollbar-width:none}body::-webkit-scrollbar{display:none}body{overflow-x:hidden}.stage{display:block}.slide{margin:0}";
-  fitEp(); applyLive(); showEp(epIdx);
+  fitEp(); applyLive(); fillPxPlaceholders(); showEp(epIdx);
 }
 window.addEventListener("resize",()=>{fitEp();});
 
@@ -721,10 +725,12 @@ async function openEditor(){
 $("#vEdit").onclick=openEditor;
 // 편집값 변경 → 즉시 미리보기 반영(크기·위치·로고). 글 내용은 저장 때 반영.
 $("#eBody").addEventListener("input",(e)=>{
-  if(e.target.matches('[data-fpx],[data-slidescale],[data-align],[data-style-logo],[data-style-ts]')) applyLive();
+  // px 타자 등 연속 입력 → 디바운스. 무거운 '현재 크기' 재측정은 여기서 하지 않는다.
+  if(e.target.matches('[data-fpx],[data-slidescale],[data-align],[data-style-logo],[data-style-ts]')) applyLiveDebounced();
 });
 $("#eBody").addEventListener("change",(e)=>{
-  if(e.target.matches('[data-slidescale],[data-align],[data-style-logo],[data-style-ts]')) applyLive();
+  // 배율/전체글자/로고(선택형) 변경 → 즉시 반영 + 기준 크기가 바뀌므로 placeholder 갱신.
+  if(e.target.matches('[data-slidescale],[data-align],[data-style-logo],[data-style-ts]')){ applyLive(); fillPxPlaceholdersDebounced(); }
 });
 $("#eClose").onclick=()=>$("#editor").classList.add("hidden");
 $("#eSave").onclick=async()=>{
