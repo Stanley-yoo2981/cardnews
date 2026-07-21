@@ -453,8 +453,36 @@ const EDIT_SECTIONS=[
     ["체크1","s9.checks.0","text"],["체크2","s9.checks.1","text"],
     ["체크3","s9.checks.2","text"],["체크4","s9.checks.3","text"]],"s9"],
   ["10장 · 상담(마무리)",[["마무리 헤드라인","cta_h1","area"],["강조 단어","cta_h1_em","text"]],"cta"],
+  ["카드 공통 문구(뱃지·하단 태그 등)",[
+    ["표지 뱃지(실제 성공사례)","chrome.coverBadge","text"],
+    ["표지 하단 태그","chrome.coverTag","text"],
+    ["2장 하단 태그","chrome.tagS2","text"],
+    ["3장 하단 태그","chrome.tagS3","text"],
+    ["4장 하단 태그","chrome.tagS4","text"],
+    ["5장 하단 태그","chrome.tagS5","text"],
+    ["6장 저장 뱃지","chrome.statsBadge","text"],
+    ["6장 하단 태그","chrome.tagS6","text"],
+    ["7장 하단 태그","chrome.tagS7","text"],
+    ["8장 하단 태그","chrome.tagS8","text"],
+    ["9장 저장 뱃지","chrome.checklistBadge","text"],
+    ["9장 하단 태그","chrome.tagS9","text"],
+    ["10장 · 검토 변호사 안내문","chrome.ctaLabel","text"],
+    ["10장 · 사건 유형 태그","chrome.ctaCaseTag","text"],
+    ["10장 · 상담 라벨","chrome.ctaPhoneLabel","text"],
+    ["10장 · 상담 부제","chrome.ctaPhoneSub","text"],
+  ]],
   ["인스타 본문",[["캡션","caption","area"],["해시태그(쉼표로 구분)","hashtags","csv"]]],
 ];
+// build.mjs 의 CHROME_DEFAULTS 와 동일하게 유지할 것(카드 공통 문구 기본값 — 편집칸 최초 표시용)
+const CHROME_DEFAULTS={
+  coverBadge:"실제 성공사례", coverTag:"실제 판결로 확인된 대응 전략",
+  tagS2:"여온의 이야기 · 성공사례", tagS3:"문제 정의", tagS4:"정황 증거의 힘",
+  tagS5:"조문은 하나가 아닙니다", tagS6:"해당 사건의 법원 판단 결과",
+  tagS7:"실무에서 자주 쓰이는 자료", tagS8:"가장 중요한 문장", tagS9:"캡처해서 보관하세요",
+  statsBadge:"저장 포인트", checklistBadge:"저장해두기",
+  ctaLabel:"이 사례를 검토한 변호사", ctaCaseTag:"가사 · 이혼 사건",
+  ctaPhoneLabel:"법률 상담 문의", ctaPhoneSub:"서울 주사무소 · 카카오톡 1:1 상담 가능",
+};
 // 카드 글자 크기 배율 선택지(공통)
 const SCALE_OPTS=[["","기본"],["0.7","아주 작게"],["0.85","작게"],["1","보통"],["1.15","크게"],["1.3","아주 크게"],["1.5","최대"]];
 // 카드 상하 위치(빈 여백 배분)
@@ -581,6 +609,8 @@ function buildEditorForm(data){
       el.dataset.k=k;el.dataset.type=type;
       let v=getPath(data,k);
       if(type==="csv"&&Array.isArray(v)) v=v.join(", ");
+      // 카드 공통 문구(chrome.*)는 아직 편집 안 했으면 기본값을 미리 채워 보여준다.
+      if(v==null&&k.indexOf("chrome.")===0) v=CHROME_DEFAULTS[k.slice(7)];
       el.value=(v==null?"":v);
       if(pxable){
         const wrap=document.createElement("div");wrap.className="fwrap";
@@ -725,6 +755,16 @@ function liveFieldKind(key){
   if(/\.body$/.test(key)) return "rich";
   return "plain";
 }
+// 일반 텍스트 갱신: 이 요소 안에 다른 필드가 자식으로 같이 들어있는 경우가 있다
+// (예: 자료카드 제목 <p> 안의 설명 <small>, 대비카드 제목 안의 <br>+설명 <span>).
+// el.textContent 로 통째로 교체하면 그 자식이 같이 사라지므로, 자식 요소는 보존하고
+// 맨 앞 텍스트만 새 값으로 바꾼다.
+function liveSetPlainText(el,val){
+  const kept=Array.from(el.children);
+  el.textContent="";
+  el.appendChild(document.createTextNode(val));
+  kept.forEach(ch=>el.appendChild(ch));
+}
 function liveTextSync(key){
   const doc=epDoc(); if(!doc)return;
   let k=key, kind=liveFieldKind(key);
@@ -737,7 +777,7 @@ function liveTextSync(key){
     el.innerHTML=liveHeadlineHtml(val, emEl?emEl.value:"");
   }else if(kind==="ml"){ el.innerHTML=liveMlHtml(val); }
   else if(kind==="rich"){ el.innerHTML=liveRichHtml(val); }
-  else{ el.textContent=val; } // 일반 텍스트는 innerHTML 없이 넣어 이스케이프 걱정이 없다
+  else{ liveSetPlainText(el,val); }
 }
 let _phT=null;
 function fillPxPlaceholdersDebounced(){ if(_phT)clearTimeout(_phT); _phT=setTimeout(fillPxPlaceholders,160); }
