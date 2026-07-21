@@ -696,6 +696,49 @@ function applyLive(){
 // 타자 중엔 매번 반영하지 않고, 입력이 잠깐 멈춘 뒤 한 번만 반영(버벅임 방지).
 let _liveT=null;
 function applyLiveDebounced(){ if(_liveT)clearTimeout(_liveT); _liveT=setTimeout(applyLive,120); }
+
+// ── 글자 내용(헤드라인·설명 등) 실시간 반영 ──────────────────────────────
+// build.mjs 의 esc()/headline()/ml()/richText() 와 동일한 규칙으로 문자열을 만들어
+// iframe 안의 해당 data-f 요소에 그대로 꽂아 넣는다(서버 재렌더 없이 즉시 반영).
+function liveEsc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function liveHeadlineHtml(text,emphasis){
+  const em=(emphasis||"").trim(); const emEsc=em?liveEsc(em):""; let emDone=false;
+  return String(text??"").split("\n").map(line=>{
+    let h=liveEsc(line);
+    if(emEsc&&!emDone&&h.includes(emEsc)){ h=h.replace(emEsc,"<em>"+emEsc+"</em>"); emDone=true; }
+    return '<span class="ln">'+h+'</span>';
+  }).join("");
+}
+function liveMlHtml(s){ return liveEsc(s).replace(/\n/g,"<br>"); }
+function liveRichHtml(s){
+  return String(s??"").split(/\n{2,}/).map(p=>{
+    const h=liveEsc(p).replace(/\n/g,"<br>").replace(/\*\*(.+?)\*\*/g,'<b class="hl">$1</b>');
+    return "<p>"+h+"</p>";
+  }).join("");
+}
+// 필드 키(=data-f 와 동일)로 어떤 규칙을 쓸지 판단
+function liveFieldKind(key){
+  if(/_em$/.test(key)) return "em"; // 대응하는 헤드라인 쪽을 다시 그린다
+  if(key==="cover_h1"||key==="cta_h1"||/\.h1$/.test(key)) return "headline";
+  if(key==="cover_quote") return "ml";
+  if(/\.sub$/.test(key)) return "ml";
+  if(/\.body$/.test(key)) return "rich";
+  return "plain";
+}
+function liveTextSync(key){
+  const doc=epDoc(); if(!doc)return;
+  let k=key, kind=liveFieldKind(key);
+  if(kind==="em"){ k=key.replace(/_em$/,""); kind="headline"; }
+  const el=doc.querySelector('[data-f="'+k+'"]'); if(!el)return; // 해당 카드에 없는 필드(빈 값 등)면 조용히 넘어간다
+  const valEl=document.querySelector('#eBody [data-k="'+k+'"]'); if(!valEl)return;
+  const val=valEl.value;
+  if(kind==="headline"){
+    const emEl=document.querySelector('#eBody [data-k="'+k+'_em"]');
+    el.innerHTML=liveHeadlineHtml(val, emEl?emEl.value:"");
+  }else if(kind==="ml"){ el.innerHTML=liveMlHtml(val); }
+  else if(kind==="rich"){ el.innerHTML=liveRichHtml(val); }
+  else{ el.textContent=val; } // 일반 텍스트는 innerHTML 없이 넣어 이스케이프 걱정이 없다
+}
 let _phT=null;
 function fillPxPlaceholdersDebounced(){ if(_phT)clearTimeout(_phT); _phT=setTimeout(fillPxPlaceholders,160); }
 // 각 px 칸에 '현재 크기'를 placeholder 로 보여준다(비어 있을 때만 노출).
@@ -732,10 +775,12 @@ async function openEditor(){
   $("#editor").classList.remove("hidden");$("#eBody").scrollTop=0;
 }
 $("#vEdit").onclick=openEditor;
-// 편집값 변경 → 즉시 미리보기 반영(크기·위치·로고). 글 내용은 저장 때 반영.
+// 편집값 변경 → 즉시 미리보기 반영(크기·위치·로고·글자 내용 모두 타이핑 즉시 반영).
 $("#eBody").addEventListener("input",(e)=>{
   // px 타자 등 연속 입력 → 디바운스. 무거운 '현재 크기' 재측정은 여기서 하지 않는다.
   if(e.target.matches('[data-fpx],[data-slidescale],[data-align],[data-style-logo],[data-style-ts]')) applyLiveDebounced();
+  // 헤드라인·설명 등 글자 내용은 가벼운 단일 요소 갱신이라 디바운스 없이 즉시 반영.
+  if(e.target.matches('[data-k]')) liveTextSync(e.target.dataset.k);
 });
 $("#eBody").addEventListener("change",(e)=>{
   // 배율/전체글자/로고(선택형) 변경 → 즉시 반영 + 기준 크기가 바뀌므로 placeholder 갱신.
