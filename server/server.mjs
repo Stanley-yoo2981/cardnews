@@ -19,7 +19,17 @@ const app = express();
 app.use(express.json({ limit: "24mb" })); // 판결문 이미지 업로드(base64) 여유
 
 // 정적: UI, 생성된 PNG(초안)
-app.use(express.static(path.join(HERE, "public")));
+// index.html(및 모든 .html)은 캐시하지 않는다 — 업데이트가 잦은데 브라우저가 예전 화면을
+// 계속 캐시에서 꺼내 쓰면 '수정했는데 그대로/무반응' 문제가 생긴다(시크릿 창만 되는 증상).
+app.use(
+  express.static(path.join(HERE, "public"), {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith(".html")) {
+        res.setHeader("Cache-Control", "no-store, must-revalidate");
+      }
+    },
+  })
+);
 app.use("/drafts", express.static(DRAFTS_DIR));
 
 // drafts/ 하위 경로만 허용(경로 이탈 방지). dir 는 DATA_DIR 기준 상대경로.
