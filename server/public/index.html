@@ -359,21 +359,30 @@ function renderCards(cards,bust){
 }
 async function openViewer(dir){
   curDir=dir;
-  const r=await fetch("/api/draft?dir="+encodeURIComponent(dir));const d=await r.json();
-  if(!d.ok){ alert("초안을 불러오지 못했습니다: "+d.error); return; }
-  $("#vTitle").textContent=d.id+" · "+(d.lawyer?d.lawyer+" 변호사":"");
-  setBadge(d.status);
-  renderCards(d.cards,false);
-  $("#vReview").textContent=d.review||"(원문 근거 없음)";
-  $("#vCaption").textContent=d.caption||"";
-  $("#vReviewer").value=d.reviewer||"";$("#vMemo").value=d.memo||"";
-  let meta=d.reviewedAt?("최근 검수: "+(d.reviewer||"")+" · "+new Date(d.reviewedAt).toLocaleString("ko-KR")):"아직 검수 전";
-  if(d.driveUrl) meta+=' · <a href="'+d.driveUrl+'" target="_blank" style="color:var(--gold2)">☁ 드라이브</a>';
-  else if(d.driveError) meta+=' · <span style="color:#ffb4a2">드라이브 실패</span>';
-  if(d.lawyerAuto) meta='<span style="color:#ffb4a2">⚠ 검토 변호사 기본값('+esc(d.lawyer||"김선호")+') — 실제 담당자인지 편집에서 확인하세요.</span><br>'+meta;
-  $("#vMeta").innerHTML=meta;
-  $("#vStatus").textContent="";
+  // 즉시 뷰어를 열고 '불러오는 중' 표시 → 무료 서버 복원이 느려도 눌린 반응이 바로 보인다.
+  $("#vTitle").textContent="불러오는 중…";
+  $("#vCards").innerHTML="";$("#vReview").textContent="";$("#vCaption").textContent="";
+  $("#vMeta").textContent="";$("#vStatus").textContent="";$("#vReviewer").value="";$("#vMemo").value="";
   $("#viewer").classList.remove("hidden");document.body.style.overflow="hidden";
+  try{
+    const r=await fetch("/api/draft?dir="+encodeURIComponent(dir));
+    const d=await safeJson(r); // 502/503 등 비JSON 응답도 알아보기 쉬운 오류로 변환
+    if(!d.ok) throw new Error(d.error||"초안을 불러오지 못했습니다.");
+    $("#vTitle").textContent=d.id+" · "+(d.lawyer?d.lawyer+" 변호사":"");
+    setBadge(d.status);
+    renderCards(d.cards,false);
+    $("#vReview").textContent=d.review||"(원문 근거 없음)";
+    $("#vCaption").textContent=d.caption||"";
+    $("#vReviewer").value=d.reviewer||"";$("#vMemo").value=d.memo||"";
+    let meta=d.reviewedAt?("최근 검수: "+(d.reviewer||"")+" · "+new Date(d.reviewedAt).toLocaleString("ko-KR")):"아직 검수 전";
+    if(d.driveUrl) meta+=' · <a href="'+d.driveUrl+'" target="_blank" style="color:var(--gold2)">☁ 드라이브</a>';
+    else if(d.driveError) meta+=' · <span style="color:#ffb4a2">드라이브 실패</span>';
+    if(d.lawyerAuto) meta='<span style="color:#ffb4a2">⚠ 검토 변호사 기본값('+esc(d.lawyer||"김선호")+') — 실제 담당자인지 편집에서 확인하세요.</span><br>'+meta;
+    $("#vMeta").innerHTML=meta;
+  }catch(e){
+    $("#vTitle").textContent="불러오기 실패";
+    $("#vStatus").innerHTML='<span style="color:#ffb4a2">'+esc(e.message)+' 잠시 후 다시 눌러 주세요.</span>';
+  }
 }
 function setBadge(status){const b=$("#vBadge");b.className="badge "+status;b.textContent=STATUS_KR[status];}
 $("#vClose").onclick=()=>{ $("#viewer").classList.add("hidden");document.body.style.overflow="";loadDrafts(); };
