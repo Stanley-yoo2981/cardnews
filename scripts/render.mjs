@@ -28,10 +28,15 @@ const browser = await puppeteer.launch({
 });
 const page = await browser.newPage();
 await page.setViewport({ width: 1080, height: 1350, deviceScaleFactor: SCALE });
-await page.goto("file://" + file, { waitUntil: "networkidle0" });
+// 문서만 뜨면 진행한다. networkidle0 은 외부 폰트 CDN(jsdelivr)이 느리거나 막히면
+// '네트워크 유휴'가 오지 않아 30초 타임아웃이 난다 → domcontentloaded 로 바꾼다.
+await page.goto("file://" + file, { waitUntil: "domcontentloaded", timeout: 60000 });
 
-// 폰트 로딩 완료까지 대기 (한글 글꼴이 늦게 붙으면 자간이 깨진다)
-await page.evaluateHandle("document.fonts.ready");
+// 폰트 로딩 대기 — 단, 최대 5초. CDN 이 느리거나 막혀도 무한 대기하지 않고 시스템 폰트로 진행.
+await Promise.race([
+  page.evaluate(async () => { await document.fonts.ready; }),
+  new Promise((r) => setTimeout(r, 5000)),
+]);
 
 // 미리보기 UI와 축소 transform 제거 — 캡처는 항상 1:1
 await page.evaluate(() => {
