@@ -373,11 +373,15 @@ export async function runPipeline(input) {
   }
 
   const bg = {};
+  // 슬롯별 출처(src=원문 실사진 | ai=AI 생성). AI 이미지는 텍스트를 요청하지 않아도
+  // 모델이 알아볼 수 없는 글자 비슷한 낙서(할루시네이션)를 그려 넣는 경우가 있어,
+  // 원문 사진과 달리 항상 흐리게 처리해 그런 글자가 또렷이 보이는 일을 막는다(build.mjs 참고).
+  const bgOrigin = {};
   if (articleHtml && urlForRecord) {
     try {
       const map = await backgroundsFromSource(articleHtml, urlForRecord, { cap: slots.length });
       const uris = Object.keys(map).map((k) => Number(k)).sort((a, b) => a - b).map((k) => map[k]);
-      slots.forEach((s, idx) => { if (uris[idx]) bg[s] = uris[idx]; }); // 원문 사진을 슬롯에 유일 배정
+      slots.forEach((s, idx) => { if (uris[idx]) { bg[s] = uris[idx]; bgOrigin[s] = "src"; } }); // 원문 사진을 슬롯에 유일 배정
     } catch (e) {
       console.error("[srcimg] 원문 이미지 배경 건너뜀:", e.message);
     }
@@ -399,7 +403,7 @@ export async function runPipeline(input) {
             })
           )
         );
-        need.forEach((s, i) => { if (gen[i]) bg[s] = gen[i]; });
+        need.forEach((s, i) => { if (gen[i]) { bg[s] = gen[i]; bgOrigin[s] = "ai"; } });
       } catch (e) {
         console.error("[image] AI 빈칸 채움 실패:", e.message);
       }
@@ -407,7 +411,7 @@ export async function runPipeline(input) {
   }
   if (Object.keys(bg).length) {
     data.bg = bg;
-    data.bgKind = "src"; // 원문·AI 모두 '선명 + 하단 그라데이션' 처리
+    data.bgOrigin = bgOrigin; // 슬롯별 출처 — build.mjs 가 AI 이미지만 골라 흐리게 처리한다.
   }
 
   // 최종 빌드 → compliance(재확인) → 렌더 → caption/data.json

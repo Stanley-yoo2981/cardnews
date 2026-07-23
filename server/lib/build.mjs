@@ -140,13 +140,16 @@ function logoDataUri() {
 
 // 공통 배경.
 //  - uri 가 있으면 .bg 에 깔고 강하게 블러/어둡게 처리한다(CSS 에 내장).
-//    kind="src"(원문 사진)면 .bg.src 로 더 강한 블러를 줘 세부를 지운다.
-//  - 없으면 CSS 메쉬로 폴백한다(더 선명한 브랜드 색).
+//    kind="src"(원문 실사진)면 선명하게, kind="ai"(생성 이미지)면 항상 흐리고 어둡게.
+//    AI 이미지는 "글자를 넣지 마라"고 프롬프트에 못박아도, 모델이 알아볼 수 없는
+//    글자 비슷한 낙서(할루시네이션)를 그려 넣는 경우가 있다. 그게 선명하게 보이면
+//    카드에 정체불명의 글자가 찍혀 나오므로, AI 이미지는 예외 없이 흐리게 깐다.
+//  - 이미지가 전혀 없으면 CSS 메쉬로 폴백한다(더 선명한 브랜드 색).
 // scrim/grain 은 항상 얹어 가독성을 확보한다.
 function bg(seed = 0, uri = null, kind = "ai") {
   if (uri) {
     const safe = String(uri).replace(/"/g, "&quot;");
-    const cls = kind === "src" ? "bg src" : "bg";
+    const cls = kind === "src" ? "bg src" : "bg ai";
     return `<div class="${cls}" style="background-image:url(&quot;${safe}&quot;)"></div><div class="grain"></div><div class="scrim"></div>`;
   }
   // 원문/AI 이미지가 없는 칸의 폴백 배경.
@@ -265,8 +268,13 @@ h1 .u{background:linear-gradient(transparent 60%,rgba(242,205,115,.4) 60%)}
 .sub.tight{font-size:33px;line-height:1.55}
 .card p small{color:rgba(246,243,237,.66)}
 
-/* 원문 사진 배경: 블러 없이 선명하게. 가독성은 아래 하단 그라데이션이 확보한다. */
+/* 원문 실사진 배경: 블러 없이 선명하게. 가독성은 아래 하단 그라데이션이 확보한다. */
 .slide .bg.src{filter:brightness(.92) contrast(1.02);inset:0;transform:none}
+
+/* AI 생성 배경: 모드·카드 종류와 무관하게 항상 강하게 흐리고 어둡게 깐다.
+   모델이 "글자 없음" 지시를 어기고 알아볼 수 없는 글자 비슷한 낙서를 그려 넣는 사고가
+   있어, 그게 선명하게 보이는 일이 없도록 예외를 두지 않는다(!important 로 고정). */
+.slide .bg.ai{filter:brightness(.38) saturate(.75) blur(20px) !important}
 
 /* 하단부터 검정이 짙어지는 그라데이션(뉴스카드 스타일):
    위쪽은 이미지가 선명히 보이고, 아래로 갈수록 어두워져 흰 글자가 읽힌다. */
@@ -507,13 +515,13 @@ function slideChecklist(d, bgUri, kind, saveLabel, tag) {
 
 // (선택) 판결문/증거 카드 — 연락처 카드 바로 앞. v={uri, kind:"doc"|"ai"}.
 //  doc: 첨부한 실제 판결문을 문서처럼 액자에 담아 보여준다.
-//  ai : 판결문이 없어 내용에 어울리는 이미지를 생성한 경우(선명한 이미지 + 하단 그라데이션).
+//  ai : 판결문이 없어 내용에 어울리는 이미지를 생성한 경우 — AI 이미지이므로 항상 흐리게.
 function slideVerdict(v, pageNum) {
   const uri = String(v.uri || "").replace(/"/g, "&quot;");
   if (v.kind === "ai") {
     return `
   <section class="slide cover verdict-ai" data-n="${String(pageNum).padStart(2, "0")}">
-    ${bg(10, v.uri, "src")}
+    ${bg(10, v.uri, "ai")}
     <div class="inner">
       ${top(pageNum)}
       <div class="body-area">
@@ -667,16 +675,15 @@ ${slidesHtml}
 // 상세 버전: 표지 + 본문 카드(sections) + (선택)판결문 + 상담 안내.
 function buildHtmlDetail(d) {
   const B = d.bg || {};
-  const K = d.bgKind || "ai";
   const secs = Array.isArray(d.sections) ? d.sections.slice(0, 8) : [];
   const hasV = d.verdict && d.verdict.uri;
   _total = 1 + secs.length + (hasV ? 1 : 0) + 1;
   const dn = { cover: "01" };
-  const list = [slideCoverDetail(d, ...imgOf(d, "cover", B[1], K))];
+  const list = [slideCoverDetail(d, ...imgOf(d, "cover", B[1], originOf(d, 1)))];
   let n = 2;
   secs.forEach((sec, i) => {
     dn[`sec${i}`] = String(n).padStart(2, "0");
-    const [uri, kind] = imgOf(d, `sec${i}`, B[n], K);
+    const [uri, kind] = imgOf(d, `sec${i}`, B[n], originOf(d, n));
     list.push(slideDetail(n, sec, uri, kind, i));
     n += 1;
   });
@@ -686,7 +693,7 @@ function buildHtmlDetail(d) {
     n += 1;
   }
   dn.cta = String(n).padStart(2, "0");
-  list.push(slideCta(d.lawyer, d.cta_h1, d.cta_h1_em, ...imgOf(d, "cta", B[n], K), n, d));
+  list.push(slideCta(d.lawyer, d.cta_h1, d.cta_h1_em, ...imgOf(d, "cta", B[n], originOf(d, n)), n, d));
   return wrapDocument(d, list.join("\n"), dn);
 }
 
@@ -695,31 +702,37 @@ function buildHtmlDetail(d) {
  * @param {object} d 생성 엔진이 만든 슬라이드 데이터
  * @returns {string} index.html 내용
  */
+// 슬롯(카드 번호)의 기본 배경 출처. bgOrigin 이 있으면 그대로 따르고("src"=원문 실사진,
+// "ai"=생성 이미지), 없으면(이 기능 이전에 만들어진 예전 데이터) 안전하게 "ai"(흐림)로
+// 본다 — 실제로는 원문 사진이었을 수도 있지만, 확인할 수 없으니 항상 안전한 쪽을 택한다.
+function originOf(d, slotNum) {
+  return (d.bgOrigin && d.bgOrigin[slotNum]) || "ai";
+}
 // 카드별 이미지 오버라이드(편집에서 빼기/넣기). key: cover,s2..s9,sec0..,cta.
-//  - "none" → 이미지 없이 CSS 메쉬  - data:URI → 그 이미지(선명 처리)  - 없음 → 기본(def)
-function imgOf(d, key, def, K) {
+//  - "none" → 이미지 없이 CSS 메쉬  - data:URI → 편집자가 직접 올린 사진(항상 선명 처리)
+//  - 없음 → 기본(def) + 그 슬롯의 원래 출처(defaultKind)
+function imgOf(d, key, def, defaultKind) {
   const c = d.cardImg && d.cardImg[key];
-  if (c === "none") return [null, K];
+  if (c === "none") return [null, defaultKind];
   if (typeof c === "string" && c.startsWith("data:")) return [c, "src"];
-  return [def, K];
+  return [def, defaultKind];
 }
 
 export function buildHtml(d) {
   if (d.mode === "detail") return buildHtmlDetail(d);
   const B = d.bg || {}; // { 1: dataUri, ... } — 배경 이미지(선택). 없으면 CSS 메쉬.
-  const K = d.bgKind || "ai"; // "src"=원문 사진 | "ai"=AI 생성
   const hasV = d.verdict && d.verdict.uri; // 판결문/증거 카드(선택)
   _total = hasV ? 11 : 10; // 페이지 번호 분모(top)
   const list = [
-    slideCover(d, ...imgOf(d, "cover", B[1], K)),
-    slideText(2, d.s2, chromeText(d, "tagS2"), ...imgOf(d, "s2", B[2], K)),
-    slideText(3, d.s3, chromeText(d, "tagS3"), ...imgOf(d, "s3", B[3], K)),
-    slideText(4, d.s4, chromeText(d, "tagS4"), ...imgOf(d, "s4", B[4], K)),
-    slideVs(d.s5, ...imgOf(d, "s5", B[5], K), chromeText(d, "tagS5")),
-    slideStats(d.s6, ...imgOf(d, "s6", B[6], K), chromeText(d, "statsBadge"), chromeText(d, "tagS6")),
-    slideCards(d.s7, ...imgOf(d, "s7", B[7], K), chromeText(d, "tagS7")),
-    slideText(8, d.s8, chromeText(d, "tagS8"), ...imgOf(d, "s8", B[8], K)),
-    slideChecklist(d.s9, ...imgOf(d, "s9", B[9], K), chromeText(d, "checklistBadge"), chromeText(d, "tagS9")),
+    slideCover(d, ...imgOf(d, "cover", B[1], originOf(d, 1))),
+    slideText(2, d.s2, chromeText(d, "tagS2"), ...imgOf(d, "s2", B[2], originOf(d, 2))),
+    slideText(3, d.s3, chromeText(d, "tagS3"), ...imgOf(d, "s3", B[3], originOf(d, 3))),
+    slideText(4, d.s4, chromeText(d, "tagS4"), ...imgOf(d, "s4", B[4], originOf(d, 4))),
+    slideVs(d.s5, ...imgOf(d, "s5", B[5], originOf(d, 5)), chromeText(d, "tagS5")),
+    slideStats(d.s6, ...imgOf(d, "s6", B[6], originOf(d, 6)), chromeText(d, "statsBadge"), chromeText(d, "tagS6")),
+    slideCards(d.s7, ...imgOf(d, "s7", B[7], originOf(d, 7)), chromeText(d, "tagS7")),
+    slideText(8, d.s8, chromeText(d, "tagS8"), ...imgOf(d, "s8", B[8], originOf(d, 8))),
+    slideChecklist(d.s9, ...imgOf(d, "s9", B[9], originOf(d, 9)), chromeText(d, "checklistBadge"), chromeText(d, "tagS9")),
   ];
   let pg = 10;
   let verdictN = null;
@@ -728,7 +741,7 @@ export function buildHtml(d) {
     list.push(slideVerdict(d.verdict, 10));
     pg = 11;
   }
-  list.push(slideCta(d.lawyer, d.cta_h1, d.cta_h1_em, ...imgOf(d, "cta", B[10], K), pg, d));
+  list.push(slideCta(d.lawyer, d.cta_h1, d.cta_h1_em, ...imgOf(d, "cta", B[10], originOf(d, 10)), pg, d));
 
   const dn = { cover: "01", s2: "02", s3: "03", s4: "04", s5: "05", s6: "06", s7: "07", s8: "08", s9: "09" };
   if (verdictN) dn.verdict = String(verdictN).padStart(2, "0");
