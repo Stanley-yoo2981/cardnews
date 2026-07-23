@@ -271,10 +271,11 @@ h1 .u{background:linear-gradient(transparent 60%,rgba(242,205,115,.4) 60%)}
 /* 원문 실사진 배경: 블러 없이 선명하게. 가독성은 아래 하단 그라데이션이 확보한다. */
 .slide .bg.src{filter:brightness(.92) contrast(1.02);inset:0;transform:none}
 
-/* AI 생성 배경: 모드·카드 종류와 무관하게 항상 강하게 흐리고 어둡게 깐다.
-   모델이 "글자 없음" 지시를 어기고 알아볼 수 없는 글자 비슷한 낙서를 그려 넣는 사고가
-   있어, 그게 선명하게 보이는 일이 없도록 예외를 두지 않는다(!important 로 고정). */
-.slide .bg.ai{filter:brightness(.38) saturate(.75) blur(20px) !important}
+/* AI 생성 배경: 모델이 "글자 없음" 지시를 어기고 알아볼 수 없는 글자 비슷한
+   낙서를 그려 넣는 사고가 있어 약간의 흐림은 유지하되, 사진 자체가 안 보일 만큼
+   어둡게 깔면 안 된다 — 15~30% 정도만 어둡게(불투명 오버레이 느낌)+가벼운 블러로,
+   작은 글자 낙서만 뭉개고 사진은 또렷이 보이게 한다. */
+.slide .bg.ai{filter:brightness(.8) saturate(.92) blur(6px) !important}
 
 /* 하단부터 검정이 짙어지는 그라데이션(뉴스카드 스타일):
    위쪽은 이미지가 선명히 보이고, 아래로 갈수록 어두워져 흰 글자가 읽힌다. */
