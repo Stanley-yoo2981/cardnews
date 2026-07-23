@@ -590,7 +590,7 @@ function buildEditorForm(data){
       const cur=(imgData[slideKey]);
       const setStt=(t,on)=>{stt.textContent="상태: "+t;stt.className="imgstate"+(on?" on":"");};
       setStt(cur==="none"?"이미지 뺌":(cur?"교체됨":"기본"),Boolean(cur));
-      rm.onclick=()=>{curCardImg[slideKey]="none";setStt("이미지 뺌(저장 시 반영)",true);};
+      rm.onclick=()=>{curCardImg[slideKey]="none";setStt("이미지 뺌(저장 시 반영)",true);liveApplyCardImg(slideKey,"none");};
       add.onclick=()=>pickCardImg(slideKey,setStt);
       row.appendChild(rm);row.appendChild(add);imf.appendChild(row);imf.appendChild(stt);
       sec.appendChild(imf);
@@ -663,12 +663,26 @@ function collectPatch(){
 let curCardImg={};
 let _imgTarget=null, _imgStatusCb=null;
 function pickCardImg(key,setStt){ _imgTarget=key; _imgStatusCb=setStt; $("#cardImgFile").click(); }
+// 카드 배경 이미지를 미리보기에 즉시 반영(저장 전에도 바로 보이도록). 변호사 얼굴 사진은
+// 이 기능과 무관하다 — 이 카드의 '뒷배경'만 바꾼다(변호사 사진은 '검토 변호사' 선택으로 바뀐다).
+function liveApplyCardImg(key,val){
+  const doc=epDoc(); if(!doc)return;
+  const dn=curPAGE[key]; if(!dn)return;
+  const slide=doc.querySelector('.slide[data-n="'+String(dn).padStart(2,"0")+'"]'); if(!slide)return;
+  const bgEl=slide.querySelector(".bg"); if(!bgEl)return;
+  if(val==="none"){ bgEl.style.backgroundImage="none"; bgEl.classList.remove("src"); }
+  else{ bgEl.style.backgroundImage='url("'+val+'")'; bgEl.classList.add("src"); }
+}
 $("#cardImgFile").onchange=(e)=>{
   const f=e.target.files[0]; e.target.value="";
   if(!f||!_imgTarget)return;
   if(f.size>14*1024*1024){ if(_imgStatusCb)_imgStatusCb("파일이 너무 큼(14MB 이하)",false); return; }
   const rd=new FileReader();
-  rd.onload=()=>{ curCardImg[_imgTarget]=rd.result; if(_imgStatusCb)_imgStatusCb("새 이미지 선택됨(저장 시 반영)",true); };
+  rd.onload=()=>{
+    curCardImg[_imgTarget]=rd.result;
+    if(_imgStatusCb)_imgStatusCb("새 이미지 선택됨(저장 시 반영)",true);
+    liveApplyCardImg(_imgTarget, rd.result);
+  };
   rd.readAsDataURL(f);
 };
 
