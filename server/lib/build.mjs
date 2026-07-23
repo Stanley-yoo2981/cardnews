@@ -96,7 +96,8 @@ function styleBlock() {
   return m[1];
 }
 
-function lawyerImageDataUri(name) {
+// 편집기의 '검토 변호사' 실시간 미리보기(/api/lawyer-photo)에서도 재사용하도록 export.
+export function lawyerImageDataUri(name) {
   const file = LAWYER_FILES[name];
   if (!file) throw new Error(`알 수 없는 변호사: ${name}`);
   const p = path.join(ROOT, "assets", "lawyers", file);
@@ -550,10 +551,10 @@ function slideCta(lawyer, ctaH1, ctaH1Em, bgUri, kind, pageNum, d) {
     <div class="inner">
       ${top(pageNum)}
       <div class="lawyer">
-        <img alt="${esc(lawyer)} 변호사" src="${img}" />
+        <img alt="${esc(lawyer)} 변호사" src="${img}" data-f="lawyer_photo" />
         <div class="meta">
           <em data-f="chrome.ctaLabel">${esc(label)}</em>
-          <strong>${esc(lawyer)} 변호사</strong>
+          <strong data-f="lawyer_name">${esc(lawyer)} 변호사</strong>
           <small data-f="chrome.ctaCaseTag">${esc(caseTag)}</small>
         </div>
       </div>

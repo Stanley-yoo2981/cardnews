@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 
 import fs from "node:fs";
 import { runPipeline, renderDraft, applyEditablePatch } from "./lib/pipeline.mjs";
-import { cardCountOf, buildHtml } from "./lib/build.mjs";
+import { cardCountOf, buildHtml, lawyerImageDataUri, FIXED } from "./lib/build.mjs";
 import { queueStatus, draftsList, setReview, patchDraft } from "./lib/state.mjs";
 import { DATA_DIR, DRAFTS_DIR } from "./lib/paths.mjs";
 import * as persist from "./lib/persist.mjs";
@@ -91,6 +91,18 @@ app.get("/api/draft-data", async (req, res) => {
     const data = JSON.parse(fs.readFileSync(dataPath, "utf8"));
     const { bg, ...rest } = data;
     res.json({ ok: true, data: rest, hasBg: Boolean(bg) });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// 변호사 사진(data URI) 단건 조회. 편집기에서 '검토 변호사'를 바꿀 때 저장 전에도
+// 미리보기에 실제 사진을 바로 보여주기 위해 쓴다(등록된 4인 중 하나만 허용).
+app.get("/api/lawyer-photo", (req, res) => {
+  try {
+    const name = String(req.query.name || "");
+    if (!FIXED.LAWYERS.includes(name)) return res.status(400).json({ ok: false, error: "알 수 없는 변호사" });
+    res.json({ ok: true, uri: lawyerImageDataUri(name) });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }

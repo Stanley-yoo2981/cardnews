@@ -526,6 +526,7 @@ function buildEditorForm(data){
   const lsel=document.createElement("select");lsel.dataset.lawyer="1";
   ["유영규","김환섭","홍기웅","김선호"].forEach(v=>{const o=document.createElement("option");o.value=v;o.textContent=v+" 변호사";lsel.appendChild(o);});
   lsel.value=data.lawyer||"김선호";
+  lsel.addEventListener("change",()=>liveApplyLawyer(lsel.value)); // 선택 즉시 미리보기 사진·이름 반영
   lf.appendChild(lsel);dsec.appendChild(lf);
   const df=document.createElement("div");df.className="efield";
   const dl=document.createElement("label");dl.textContent="로고 크기 (좌측 상단)";df.appendChild(dl);
@@ -658,6 +659,21 @@ function collectPatch(){
   // 카드별 이미지 빼기/넣기
   if(Object.keys(curCardImg).length) patch.cardImg=curCardImg;
   return patch;
+}
+// 검토 변호사를 바꾸면 저장 전에도 미리보기의 이름·실제 사진을 즉시 보여준다.
+// (변호사 사진은 등록된 4인 파일만 쓸 수 있어 서버에서 데이터URI 를 받아온다)
+async function liveApplyLawyer(name){
+  const doc=epDoc(); if(!doc)return;
+  const dn=curPAGE.cta; if(!dn)return;
+  const slide=doc.querySelector('.slide[data-n="'+String(dn).padStart(2,"0")+'"]'); if(!slide)return;
+  const nameEl=slide.querySelector('[data-f="lawyer_name"]');
+  if(nameEl) nameEl.textContent=name+" 변호사";
+  const imgEl=slide.querySelector('[data-f="lawyer_photo"]'); if(!imgEl)return;
+  try{
+    const r=await fetch("/api/lawyer-photo?name="+encodeURIComponent(name));
+    const j=await r.json();
+    if(j.ok) imgEl.src=j.uri;
+  }catch(e){ /* 네트워크 실패해도 저장하면 어차피 반영되므로 조용히 무시 */ }
 }
 // 카드별 이미지 변경 대기값(저장 시 전송). key→"none" | dataURI
 let curCardImg={};
