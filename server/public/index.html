@@ -56,8 +56,11 @@ button{font-family:inherit;cursor:pointer;border:0;border-radius:12px;font-weigh
 .vhead .t{flex:1;font-size:15px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .vhead .ebtn{background:rgba(200,165,96,.16);color:var(--gold2);border:1px solid var(--line);font-size:14px;padding:9px 15px}
 
-/* 이미지 스테이지(크게) + 좌우 화살표 */
-.stage{position:relative;flex:1;min-height:0;display:flex;background:#05080e}
+/* 검수 화면: 왼쪽 이미지 / 오른쪽 원문근거·인스타본문 (좌우 분할) */
+.vsplit{flex:1;min-height:0;display:flex}
+
+/* 이미지 스테이지(왼쪽, 크게) + 좌우 화살표(카드 넘기기) */
+.stage{position:relative;flex:1;min-width:0;display:flex;background:#05080e}
 .cards{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;flex:1;-webkit-overflow-scrolling:touch;scrollbar-width:none}
 .cards::-webkit-scrollbar{display:none}
 .cards img{flex:0 0 100%;scroll-snap-align:center;width:100%;height:100%;object-fit:contain}
@@ -69,17 +72,23 @@ button{font-family:inherit;cursor:pointer;border:0;border-radius:12px;font-weigh
 .nav:active{background:rgba(200,165,96,.35)}
 .nav.prev{left:12px}.nav.next{right:12px}
 
-/* 드래그 구분선(이미지 ↔ 정보 영역 크기 조절) */
-.vdivider{height:16px;background:#0b1220;border-top:1px solid rgba(255,255,255,.08);
-  display:flex;align-items:center;justify-content:center;cursor:row-resize;touch-action:none;flex:none}
-.vdivider::before{content:"";width:46px;height:4px;border-radius:3px;background:rgba(200,165,96,.5)}
+/* 드래그 구분선(이미지 ↔ 정보 영역 좌우 폭 조절) */
+.vdivider{width:16px;background:#0b1220;border-left:1px solid rgba(255,255,255,.08);
+  display:flex;align-items:center;justify-content:center;cursor:col-resize;touch-action:none;flex:none}
+.vdivider::before{content:"";height:46px;width:4px;border-radius:3px;background:rgba(200,165,96,.5)}
 
-.vinfo{height:200px;overflow:auto;padding:10px 16px;background:#0b1220;flex:none}
-.vinfo details{margin-bottom:10px}
+.vinfo{flex:0 0 42%;max-width:60%;overflow:auto;padding:14px 16px;background:#0b1220}
+.vinfo details{margin-bottom:12px}
 .vinfo summary{color:var(--gold2);font-size:13.5px;font-weight:800;cursor:pointer;padding:6px 0}
 .vinfo pre{white-space:pre-wrap;word-break:break-word;font-family:inherit;font-size:12.5px;line-height:1.55;
   background:rgba(10,16,28,.6);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:11px;color:var(--paper);
-  resize:vertical;overflow:auto;min-height:70px;height:150px;max-height:60vh}
+  resize:vertical;overflow:auto;min-height:70px;max-height:60vh}
+@media(max-width:820px){
+  .vsplit{flex-direction:column}
+  .stage{flex:1 1 auto;min-height:0}
+  .vdivider{display:none}
+  .vinfo{flex:0 0 40vh;max-width:none;width:auto;border-top:1px solid rgba(255,255,255,.08)}
+}
 .vbar{padding:12px 14px calc(14px + env(safe-area-inset-bottom));background:#0b1220;border-top:1px solid rgba(255,255,255,.08);flex:none}
 .vbar input{width:100%;background:rgba(10,16,28,.6);border:1px solid rgba(255,255,255,.14);border-radius:10px;
   color:var(--paper);font-family:inherit;font-size:15px;padding:12px;margin-bottom:9px}
@@ -248,17 +257,19 @@ textarea{min-height:150px;resize:vertical;line-height:1.6}
     <button class="ebtn" id="vEdit">편집</button>
     <span class="badge" id="vBadge"></span>
   </div>
-  <div class="stage">
-    <div class="cards" id="vCards"></div>
-    <button class="nav prev" id="navPrev" aria-label="이전">‹</button>
-    <button class="nav next" id="navNext" aria-label="다음">›</button>
-    <div class="counter" id="vCounter">1 / 10</div>
-  </div>
-  <div class="vdivider" id="vDivider" title="드래그해서 이미지/정보 영역 크기 조절"></div>
-  <div class="vinfo" id="vInfo">
-    <div class="banner">이 이미지는 <b>초안</b>입니다. 승인 후 인스타 업로드는 <b>사람이 직접</b> 합니다. 아래 칸은 모서리를 드래그해 크기를 조절할 수 있습니다.</div>
-    <details open><summary>원문 근거 (문구가 원문 어디서 왔는지)</summary><pre id="vReview"></pre></details>
-    <details><summary>인스타 본문 (caption)</summary><pre id="vCaption"></pre></details>
+  <div class="vsplit">
+    <div class="stage">
+      <div class="cards" id="vCards"></div>
+      <button class="nav prev" id="navPrev" aria-label="이전">‹</button>
+      <button class="nav next" id="navNext" aria-label="다음">›</button>
+      <div class="counter" id="vCounter">1 / 10</div>
+    </div>
+    <div class="vdivider" id="vDivider" title="드래그해서 이미지/정보 영역 크기 조절"></div>
+    <div class="vinfo" id="vInfo">
+      <div class="banner">이 이미지는 <b>초안</b>입니다. 승인 후 인스타 업로드는 <b>사람이 직접</b> 합니다. 구분선을 드래그해 크기를 조절할 수 있습니다.</div>
+      <details open><summary>원문 근거 (문구가 원문 어디서 왔는지)</summary><pre id="vReview"></pre></details>
+      <details open><summary>인스타 본문 (caption)</summary><pre id="vCaption"></pre></details>
+    </div>
   </div>
   <div class="vbar">
     <div class="vmeta" id="vMeta"></div>
@@ -410,13 +421,13 @@ $("#vCards").onscroll=(e)=>{const el=e.target;const i=Math.round(el.scrollLeft/e
 $("#navPrev").onclick=()=>{const el=$("#vCards");el.scrollBy({left:-el.clientWidth,behavior:"smooth"});};
 $("#navNext").onclick=()=>{const el=$("#vCards");el.scrollBy({left:el.clientWidth,behavior:"smooth"});};
 
-// 이미지 ↔ 정보 영역 드래그 리사이즈
+// 이미지 ↔ 정보 영역 드래그 리사이즈(좌우 폭 조절). 모바일(위아래 배치)에서는 비활성.
 (function(){
-  const divider=$("#vDivider"),info=$("#vInfo"),bar=$(".vbar");
+  const divider=$("#vDivider"),info=$("#vInfo"),split=$(".vsplit");
   let drag=false;
-  const clamp=(px)=>{const min=90,max=window.innerHeight*0.72;return Math.max(min,Math.min(max,px));};
-  divider.addEventListener("pointerdown",(e)=>{drag=true;divider.setPointerCapture(e.pointerId);e.preventDefault();});
-  divider.addEventListener("pointermove",(e)=>{ if(!drag)return; info.style.height=clamp(window.innerHeight-e.clientY-bar.offsetHeight)+"px"; });
+  const clamp=(px)=>{const min=240,max=split.clientWidth*0.75;return Math.max(min,Math.min(max,px));};
+  divider.addEventListener("pointerdown",(e)=>{ if(getComputedStyle(divider).display==="none")return; drag=true;divider.setPointerCapture(e.pointerId);e.preventDefault();});
+  divider.addEventListener("pointermove",(e)=>{ if(!drag)return; info.style.flexBasis=clamp(split.getBoundingClientRect().right-e.clientX)+"px"; });
   divider.addEventListener("pointerup",()=>{drag=false;});
   divider.addEventListener("pointercancel",()=>{drag=false;});
 })();
