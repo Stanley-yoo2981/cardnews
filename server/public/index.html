@@ -142,6 +142,15 @@ button{font-family:inherit;cursor:pointer;border:0;border-radius:12px;font-weigh
 .efield .fpx::-webkit-inner-spin-button{opacity:1}
 .efieldhead{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
 .efieldhead .pxlab{font-size:10.5px;color:var(--gold2);opacity:.75;font-weight:700}
+
+/* 카드 페이지 이동 바 — 미리보기와 짝지어 한 장씩만 편집(전체 스크롤 방지) */
+.epagebar{display:flex;align-items:center;gap:10px;margin:4px 0 12px;padding:9px 6px;
+  background:rgba(200,165,96,.08);border:1px solid var(--line);border-radius:12px;position:sticky;top:0;z-index:5}
+.epagebar .pgnav{flex:none;width:36px;height:36px;border-radius:9px;background:rgba(200,165,96,.16);
+  color:var(--gold2);border:1px solid var(--line);font-size:20px;line-height:1}
+.epagebar-t{flex:1;text-align:center;font-size:14px;font-weight:800;color:var(--paper)}
+#eSettings{margin-bottom:6px}
+#eCaption{margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.08)}
 .imgbtn{flex:1;background:rgba(200,165,96,.12);color:var(--gold2);border:1px solid var(--line);
   font-size:13px;padding:9px;border-radius:9px}
 .imgbtn.rm{background:rgba(232,139,122,.12);color:var(--no);border-color:rgba(232,139,122,.4)}
@@ -294,7 +303,16 @@ textarea{min-height:150px;resize:vertical;line-height:1.6}
       </div>
       <div class="ephint">크기·위치를 바꾸면 <b>실시간</b>으로 반영돼요 · 글 내용은 저장해야 그림에 반영됩니다</div>
     </div>
-    <div class="ebody" id="eBody"></div>
+    <div class="ebody" id="eBody">
+      <div id="eSettings"></div>
+      <div class="epagebar">
+        <button class="pgnav" id="fpPrev">‹</button>
+        <div class="epagebar-t" id="fpTitle">1 / 10 · 1장 · 표지</div>
+        <button class="pgnav" id="fpNext">›</button>
+      </div>
+      <div id="eCardPane"></div>
+      <div id="eCaption"></div>
+    </div>
   </div>
   <div class="estatus" id="eStatus"></div>
   <input type="file" id="cardImgFile" accept="image/png,image/jpeg,image/webp" class="hidden">
@@ -426,53 +444,48 @@ function slideFields(s){return [
   ["키커(상단 배지)",s+".kicker","text"],["헤드라인",s+".h1","area"],
   ["강조 단어(금색)",s+".h1_em","text"],["설명",s+".sub","area"],
 ];}
-// 각 섹션: [제목, 필드[], 슬라이드키?]. 슬라이드키가 있으면 그 카드 '글자 크기' 조절칸을 붙인다.
+// 각 섹션: [제목, 필드[], 슬라이드키?]. 슬라이드키가 있으면 그 카드 페이지로 취급되어
+// 미리보기와 짝지어 한 장씩 편집기에 표시된다(뱃지·하단 태그도 해당 카드 안에 함께 있음).
 const EDIT_SECTIONS=[
-  ["공통",[["카테고리(상단 배지)","category","text"]]],
-  ["1장 · 표지",[["표지 헤드라인","cover_h1","area"],["강조 단어(금색)","cover_h1_em","text"],["인용문","cover_quote","area"]],"cover"],
-  ["2장",slideFields("s2"),"s2"],
-  ["3장",slideFields("s3"),"s3"],
-  ["4장",slideFields("s4"),"s4"],
+  ["1장 · 표지",[
+    ["카테고리(상단 배지)","category","text"],
+    ["표지 뱃지(실제 성공사례)","chrome.coverBadge","text"],
+    ["표지 헤드라인","cover_h1","area"],["강조 단어(금색)","cover_h1_em","text"],["인용문","cover_quote","area"],
+    ["표지 하단 태그","chrome.coverTag","text"],
+  ],"cover"],
+  ["2장",[...slideFields("s2"),["하단 태그","chrome.tagS2","text"]],"s2"],
+  ["3장",[...slideFields("s3"),["하단 태그","chrome.tagS3","text"]],"s3"],
+  ["4장",[...slideFields("s4"),["하단 태그","chrome.tagS4","text"]],"s4"],
   ["5장 · 법리 대비",[
     ["키커","s5.kicker","text"],["헤드라인","s5.h1","area"],["강조 단어","s5.h1_em","text"],
     ["막힌 쪽 제목","s5.vs_a_title","text"],["막힌 쪽 설명","s5.vs_a_desc","text"],
-    ["열린 쪽 제목","s5.vs_b_title","text"],["열린 쪽 설명","s5.vs_b_desc","text"]],"s5"],
+    ["열린 쪽 제목","s5.vs_b_title","text"],["열린 쪽 설명","s5.vs_b_desc","text"],
+    ["하단 태그","chrome.tagS5","text"]],"s5"],
   ["6장 · 결과",[
     ["키커","s6.kicker","text"],["헤드라인","s6.h1","area"],["강조 단어","s6.h1_em","text"],["설명","s6.sub","area"],
     ["결과1 항목","s6.stats.0.label","text"],["결과1 값","s6.stats.0.value","text"],
     ["결과2 항목","s6.stats.1.label","text"],["결과2 값","s6.stats.1.value","text"],
-    ["결과3 항목","s6.stats.2.label","text"],["결과3 값","s6.stats.2.value","text"]],"s6"],
+    ["결과3 항목","s6.stats.2.label","text"],["결과3 값","s6.stats.2.value","text"],
+    ["저장 뱃지","chrome.statsBadge","text"],["하단 태그","chrome.tagS6","text"]],"s6"],
   ["7장 · 실무 자료",[
     ["키커","s7.kicker","text"],["헤드라인","s7.h1","area"],
     ["자료1 제목","s7.cards.0.title","text"],["자료1 설명","s7.cards.0.desc","text"],
     ["자료2 제목","s7.cards.1.title","text"],["자료2 설명","s7.cards.1.desc","text"],
-    ["자료3 제목","s7.cards.2.title","text"],["자료3 설명","s7.cards.2.desc","text"]],"s7"],
-  ["8장",slideFields("s8"),"s8"],
+    ["자료3 제목","s7.cards.2.title","text"],["자료3 설명","s7.cards.2.desc","text"],
+    ["하단 태그","chrome.tagS7","text"]],"s7"],
+  ["8장",[...slideFields("s8"),["하단 태그","chrome.tagS8","text"]],"s8"],
   ["9장 · 체크리스트",[
     ["키커","s9.kicker","text"],["헤드라인","s9.h1","area"],
     ["체크1","s9.checks.0","text"],["체크2","s9.checks.1","text"],
-    ["체크3","s9.checks.2","text"],["체크4","s9.checks.3","text"]],"s9"],
-  ["10장 · 상담(마무리)",[["마무리 헤드라인","cta_h1","area"],["강조 단어","cta_h1_em","text"]],"cta"],
-  ["카드 공통 문구(뱃지·하단 태그 등)",[
-    ["표지 뱃지(실제 성공사례)","chrome.coverBadge","text"],
-    ["표지 하단 태그","chrome.coverTag","text"],
-    ["2장 하단 태그","chrome.tagS2","text"],
-    ["3장 하단 태그","chrome.tagS3","text"],
-    ["4장 하단 태그","chrome.tagS4","text"],
-    ["5장 하단 태그","chrome.tagS5","text"],
-    ["6장 저장 뱃지","chrome.statsBadge","text"],
-    ["6장 하단 태그","chrome.tagS6","text"],
-    ["7장 하단 태그","chrome.tagS7","text"],
-    ["8장 하단 태그","chrome.tagS8","text"],
-    ["9장 저장 뱃지","chrome.checklistBadge","text"],
-    ["9장 하단 태그","chrome.tagS9","text"],
-    ["10장 · 검토 변호사 안내문","chrome.ctaLabel","text"],
-    ["10장 · 사건 유형 태그","chrome.ctaCaseTag","text"],
-    ["10장 · 상담 라벨","chrome.ctaPhoneLabel","text"],
-    ["10장 · 상담 부제","chrome.ctaPhoneSub","text"],
-  ]],
-  ["인스타 본문",[["캡션","caption","area"],["해시태그(쉼표로 구분)","hashtags","csv"]]],
+    ["체크3","s9.checks.2","text"],["체크4","s9.checks.3","text"],
+    ["저장 뱃지","chrome.checklistBadge","text"],["하단 태그","chrome.tagS9","text"]],"s9"],
+  ["10장 · 상담(마무리)",[
+    ["마무리 헤드라인","cta_h1","area"],["강조 단어","cta_h1_em","text"],
+    ["검토 변호사 안내문","chrome.ctaLabel","text"],["사건 유형 태그","chrome.ctaCaseTag","text"],
+    ["상담 라벨","chrome.ctaPhoneLabel","text"],["상담 부제","chrome.ctaPhoneSub","text"]],"cta"],
 ];
+// 카드 이미지가 아닌 항목(인스타 본문) — 페이지 넘김과 무관하게 항상 아래에 표시.
+const CAPTION_FIELDS=[["캡션","caption","area"],["해시태그(쉼표로 구분)","hashtags","csv"]];
 // build.mjs 의 CHROME_DEFAULTS 와 동일하게 유지할 것(카드 공통 문구 기본값 — 편집칸 최초 표시용)
 const CHROME_DEFAULTS={
   coverBadge:"실제 성공사례", coverTag:"실제 판결로 확인된 대응 전략",
@@ -491,12 +504,38 @@ function getPath(o,p){return p.split(".").reduce((a,k)=>(a==null?undefined:a[k])
 function setPath(o,p,v){const ks=p.split(".");let c=o;
   for(let i=0;i<ks.length-1;i++){const k=ks[i],nk=ks[i+1],idx=/^\d+$/.test(nk);if(c[k]==null)c[k]=idx?[]:{};c=c[k];}
   c[ks[ks.length-1]]=v;}
+// patch 를 base 위에 깊게 덮어쓴다(배열은 인덱스별로, 빈 자리는 base 값 유지).
+// 카드 페이지를 넘겼다 돌아와도 이번 세션에서 편집한 값이 그대로 보이도록,
+// 필드 표시용 데이터는 항상 이 함수로 합친 값을 쓴다.
+function deepMerge(base,patch){
+  if(Array.isArray(patch)){
+    const b=Array.isArray(base)?base:[];
+    const len=Math.max(b.length,patch.length);
+    const out=[];
+    for(let i=0;i<len;i++){
+      if(patch[i]===undefined) out[i]=b[i];
+      else if(patch[i]&&typeof patch[i]==="object") out[i]=deepMerge(b[i],patch[i]);
+      else out[i]=patch[i];
+    }
+    return out;
+  }
+  if(patch&&typeof patch==="object"){
+    const out=Object.assign({},base);
+    for(const k of Object.keys(patch)) out[k]=deepMerge(base?base[k]:undefined,patch[k]);
+    return out;
+  }
+  return patch===undefined?base:patch;
+}
+// 저장 전 화면 표시용 '유효 데이터' — 원본 + 이번 세션 편집값(pendingPatch) 합본.
+function effectiveData(){ return deepMerge(curEditData||{},pendingPatch); }
 
 // 상세(보험) 버전 편집 섹션 — 본문 카드(sections) 개수에 맞춰 동적으로 만든다.
 function detailSections(data){
   const arr=[
-    ["공통",[["카테고리(상단 배지)","category","text"]]],
-    ["표지",[["표지 헤드라인","cover_h1","area"],["강조 단어(금색)","cover_h1_em","text"],["부제(검색줄)","cover_sub","text"]],"cover"],
+    ["표지",[
+      ["카테고리(상단 배지)","category","text"],
+      ["표지 헤드라인","cover_h1","area"],["강조 단어(금색)","cover_h1_em","text"],["부제(검색줄)","cover_sub","text"],
+    ],"cover"],
   ];
   (data.sections||[]).forEach((s,i)=>{
     arr.push(["본문 "+(i+1),[
@@ -507,18 +546,110 @@ function detailSections(data){
     ],"sec"+i]);
   });
   arr.push(["마무리",[["마무리 헤드라인","cta_h1","area"],["강조 단어","cta_h1_em","text"]],"cta"]);
-  arr.push(["카톡 전달 본문",[["캡션","caption","area"],["해시태그(쉼표로 구분)","hashtags","csv"]]]);
   return arr;
 }
+// 카드 한 장 분(=한 페이지)의 편집 필드 DOM 을 만든다. slideKey 가 없으면(캡션 등)
+// 배율/위치/이미지 컨트롤 없이 필드만 만든다. data 는 편집 중인 초안 전체 데이터.
+function buildSectionNode(title,fields,slideKey,data){
+  const scaleData=(data.style&&data.style.slideScale)||{};
+  const fpxData=(data.style&&data.style.fontPx)||{};
+  const alignData=(data.style&&data.style.align)||{};
+  const imgData=data.cardImg||{};
+  const sec=document.createElement("div");sec.className="esec";
+  const h=document.createElement("h3");h.textContent=title;sec.appendChild(h);
+  if(slideKey){
+    const sf=document.createElement("div");sf.className="efield";
+    const sl=document.createElement("label");sl.textContent="이 카드 전체 글자 크기(배율)";sf.appendChild(sl);
+    const ssel=document.createElement("select");ssel.dataset.slidescale=slideKey;
+    SCALE_OPTS.forEach(([v,l])=>{const o=document.createElement("option");o.value=v;o.textContent=l;ssel.appendChild(o);});
+    ssel.value=(scaleData[slideKey]!=null)?String(scaleData[slideKey]):"";
+    sf.appendChild(ssel);sec.appendChild(sf);
+    const af=document.createElement("div");af.className="efield";
+    const al=document.createElement("label");al.textContent="이 카드 위치(상하)";af.appendChild(al);
+    const asel=document.createElement("select");asel.dataset.align=slideKey;
+    ALIGN_OPTS.forEach(([v,l])=>{const o=document.createElement("option");o.value=v;o.textContent=l;asel.appendChild(o);});
+    asel.value=(alignData[slideKey]!=null)?String(alignData[slideKey]):"";
+    af.appendChild(asel);sec.appendChild(af);
+    // 이 카드 이미지(빼기 / 넣기·교체) — 글자가 안 보일 때 배경을 빼거나 바꾼다
+    const imf=document.createElement("div");imf.className="efield";
+    const iml=document.createElement("label");iml.textContent="이 카드 이미지";imf.appendChild(iml);
+    const row=document.createElement("div");row.className="fwrap";
+    const rm=document.createElement("button");rm.type="button";rm.className="imgbtn rm";rm.textContent="빼기(글자만)";
+    const add=document.createElement("button");add.type="button";add.className="imgbtn";add.textContent="넣기·교체";
+    const stt=document.createElement("span");stt.className="imgstate";
+    const cur=(imgData[slideKey]);
+    const setStt=(t,on)=>{stt.textContent="상태: "+t;stt.className="imgstate"+(on?" on":"");};
+    setStt(cur==="none"?"이미지 뺌":(cur?"교체됨":"기본"),Boolean(cur));
+    rm.onclick=()=>{curCardImg[slideKey]="none";setStt("이미지 뺌(저장 시 반영)",true);liveApplyCardImg(slideKey,"none");};
+    add.onclick=()=>pickCardImg(slideKey,setStt);
+    row.appendChild(rm);row.appendChild(add);imf.appendChild(row);imf.appendChild(stt);
+    sec.appendChild(imf);
+  }
+  fields.forEach(([label,k,type])=>{
+    const f=document.createElement("div");f.className="efield";
+    // 개별 px 조절 대상: 카드에 실제로 찍히는 글자(캡션·해시태그 제외)
+    const pxable=(type!=="csv"&&k!=="caption");
+    const head=document.createElement("div");head.className="efieldhead";
+    const lab=document.createElement("label");lab.textContent=label;head.appendChild(lab);
+    if(pxable){const pl=document.createElement("span");pl.className="pxlab";pl.textContent="px";head.appendChild(pl);}
+    f.appendChild(head);
+    let el;
+    if(type==="area"){el=document.createElement("textarea");}
+    else{el=document.createElement("input");el.type="text";}
+    el.dataset.k=k;el.dataset.type=type;
+    let v=getPath(data,k);
+    if(type==="csv"&&Array.isArray(v)) v=v.join(", ");
+    // 카드 공통 문구(chrome.*)는 아직 편집 안 했으면 기본값을 미리 채워 보여준다.
+    if(v==null&&k.indexOf("chrome.")===0) v=CHROME_DEFAULTS[k.slice(7)];
+    el.value=(v==null?"":v);
+    if(pxable){
+      const wrap=document.createElement("div");wrap.className="fwrap";
+      wrap.appendChild(el);
+      const px=document.createElement("input");px.type="number";px.className="fpx";
+      px.dataset.fpx=k;px.min="10";px.max="240";px.placeholder="자동";
+      if(fpxData[k]!=null) px.value=fpxData[k];
+      wrap.appendChild(px);
+      f.appendChild(wrap);
+    }else{
+      f.appendChild(el);
+    }
+    sec.appendChild(f);
+  });
+  return sec;
+}
+// 카드 페이지 하나만 오른쪽 패널에 보여준다(전체 스크롤 대신 미리보기와 짝지어 한 장씩).
+// 미리보기(왼쪽)도 같은 카드로 이동시켜 항상 짝이 맞게 한다.
+function renderFieldPage(idx){
+  if(!curCardPages.length)return;
+  curFieldIdx=Math.max(0,Math.min(curCardPages.length-1,idx));
+  const [title,fields,slideKey]=curCardPages[curFieldIdx];
+  const pane=$("#eCardPane");pane.innerHTML="";
+  pane.appendChild(buildSectionNode(title,fields,slideKey,effectiveData()));
+  $("#fpTitle").textContent=(curFieldIdx+1)+" / "+curCardPages.length+" · "+title;
+  $("#eBody").scrollTop=0;
+  if(slideKey&&curPAGE[slideKey]) showEp(curPAGE[slideKey]-1);
+}
+// 왼쪽 미리보기를 화살표로 직접 넘겼을 때, 오른쪽 편집 패널도 그 카드로 맞춘다.
+function syncFieldPageFromEp(){
+  if(!curCardPages.length)return;
+  const pageNum=epIdx+1;
+  const idx=curCardPages.findIndex(([,,k])=>k&&curPAGE[k]===pageNum);
+  if(idx===-1||idx===curFieldIdx)return;
+  curFieldIdx=idx;
+  const [title,fields,slideKey]=curCardPages[curFieldIdx];
+  const pane=$("#eCardPane");pane.innerHTML="";
+  pane.appendChild(buildSectionNode(title,fields,slideKey,effectiveData()));
+  $("#fpTitle").textContent=(curFieldIdx+1)+" / "+curCardPages.length+" · "+title;
+}
 function buildEditorForm(data){
-  const body=$("#eBody");body.innerHTML="";
+  curEditData=data;
+  // 설정 · 디자인(항상 보임 — 전체 덱에 적용되는 값이라 카드별 페이지에 넣지 않는다)
+  const settings=$("#eSettings");settings.innerHTML="";
   const note=document.createElement("div");note.className="ehint";
   note.innerHTML="줄바꿈은 <b>Enter</b> 로 넣습니다(헤드라인 한 줄은 12자 이내 권장). 변호사·상담번호·면책문구·배경은 자동 고정되어 편집 대상이 아닙니다.";
-  body.appendChild(note);
-  // 디자인 — 로고 크기
+  settings.appendChild(note);
   const dsec=document.createElement("div");dsec.className="esec";
   const dh=document.createElement("h3");dh.textContent="설정 · 디자인";dsec.appendChild(dh);
-  // 검토 변호사(4인 중 실제 담당자)
   const lf=document.createElement("div");lf.className="efield";
   const ll=document.createElement("label");ll.textContent="검토 변호사"+(data.lawyerAuto?" ⚠ 자동 기본값 — 실제 담당자로 확인/변경":"");
   if(data.lawyerAuto) ll.style.color="#ffb4a2";
@@ -535,7 +666,6 @@ function buildEditorForm(data){
     const o=document.createElement("option");o.value=v;o.textContent=l;dsel.appendChild(o);});
   dsel.value=(data.style&&data.style.logo)?String(data.style.logo):"";
   df.appendChild(dsel);dsec.appendChild(df);
-  // 전체 글자 크기
   const tf=document.createElement("div");tf.className="efield";
   const tl=document.createElement("label");tl.textContent="전체 글자 크기";tf.appendChild(tl);
   const tsel=document.createElement("select");tsel.dataset.styleTs="1";
@@ -543,15 +673,11 @@ function buildEditorForm(data){
     const o=document.createElement("option");o.value=v;o.textContent=l;tsel.appendChild(o);});
   tsel.value=(data.style&&data.style.textScale)?String(data.style.textScale):"";
   tf.appendChild(tsel);dsec.appendChild(tf);
-  body.appendChild(dsec);
-  const scaleData=(data.style&&data.style.slideScale)||{};
-  const fpxData=(data.style&&data.style.fontPx)||{};
-  const alignData=(data.style&&data.style.align)||{};
-  const imgData=data.cardImg||{};
+  settings.appendChild(dsec);
+
   const hasV=Boolean(data.verdict&&data.verdict.uri);
   const detail=(data.mode==="detail");
   const secN=detail&&Array.isArray(data.sections)?data.sections.length:0;
-  // 편집할 섹션 목록 + 항목→카드 페이지 매핑(모드별)
   let sectionsToRender,PAGE;
   if(detail){
     sectionsToRender=detailSections(data);
@@ -562,103 +688,49 @@ function buildEditorForm(data){
     PAGE={cover:1,s2:2,s3:3,s4:4,s5:5,s6:6,s7:7,s8:8,s9:9,cta:hasV?11:10};
   }
   curPAGE=PAGE; // 실시간 미리보기(iframe)에서 슬라이드 data-n 매핑에 사용
-  sectionsToRender.forEach(([title,fields,slideKey])=>{
-    const sec=document.createElement("div");sec.className="esec";
-    if(slideKey&&PAGE[slideKey]){ sec.dataset.page=PAGE[slideKey]; sec.addEventListener("click",()=>showEp(PAGE[slideKey]-1)); }
-    const h=document.createElement("h3");h.textContent=title;sec.appendChild(h);
-    // 이 카드의 글자 크기(카드별, 배율). 슬라이드 섹션에만 붙는다.
-    if(slideKey){
-      const sf=document.createElement("div");sf.className="efield";
-      const sl=document.createElement("label");sl.textContent="이 카드 전체 글자 크기(배율)";sf.appendChild(sl);
-      const ssel=document.createElement("select");ssel.dataset.slidescale=slideKey;
-      SCALE_OPTS.forEach(([v,l])=>{const o=document.createElement("option");o.value=v;o.textContent=l;ssel.appendChild(o);});
-      ssel.value=(scaleData[slideKey]!=null)?String(scaleData[slideKey]):"";
-      sf.appendChild(ssel);sec.appendChild(sf);
-      // 이 카드 상하 위치(위/가운데/아래)
-      const af=document.createElement("div");af.className="efield";
-      const al=document.createElement("label");al.textContent="이 카드 위치(상하)";af.appendChild(al);
-      const asel=document.createElement("select");asel.dataset.align=slideKey;
-      ALIGN_OPTS.forEach(([v,l])=>{const o=document.createElement("option");o.value=v;o.textContent=l;asel.appendChild(o);});
-      asel.value=(alignData[slideKey]!=null)?String(alignData[slideKey]):"";
-      af.appendChild(asel);sec.appendChild(af);
-      // 이 카드 이미지(빼기 / 넣기·교체) — 글자가 안 보일 때 배경을 빼거나 바꾼다
-      const imf=document.createElement("div");imf.className="efield";
-      const iml=document.createElement("label");iml.textContent="이 카드 이미지";imf.appendChild(iml);
-      const row=document.createElement("div");row.className="fwrap";
-      const rm=document.createElement("button");rm.type="button";rm.className="imgbtn rm";rm.textContent="빼기(글자만)";
-      const add=document.createElement("button");add.type="button";add.className="imgbtn";add.textContent="넣기·교체";
-      const stt=document.createElement("span");stt.className="imgstate";
-      const cur=(imgData[slideKey]);
-      const setStt=(t,on)=>{stt.textContent="상태: "+t;stt.className="imgstate"+(on?" on":"");};
-      setStt(cur==="none"?"이미지 뺌":(cur?"교체됨":"기본"),Boolean(cur));
-      rm.onclick=()=>{curCardImg[slideKey]="none";setStt("이미지 뺌(저장 시 반영)",true);liveApplyCardImg(slideKey,"none");};
-      add.onclick=()=>pickCardImg(slideKey,setStt);
-      row.appendChild(rm);row.appendChild(add);imf.appendChild(row);imf.appendChild(stt);
-      sec.appendChild(imf);
-    }
-    fields.forEach(([label,k,type])=>{
-      const f=document.createElement("div");f.className="efield";
-      // 개별 px 조절 대상: 카드에 실제로 찍히는 글자(캡션·해시태그 제외)
-      const pxable=(type!=="csv"&&k!=="caption");
-      const head=document.createElement("div");head.className="efieldhead";
-      const lab=document.createElement("label");lab.textContent=label;head.appendChild(lab);
-      if(pxable){const pl=document.createElement("span");pl.className="pxlab";pl.textContent="px";head.appendChild(pl);}
-      f.appendChild(head);
-      let el;
-      if(type==="area"){el=document.createElement("textarea");}
-      else{el=document.createElement("input");el.type="text";}
-      el.dataset.k=k;el.dataset.type=type;
-      let v=getPath(data,k);
-      if(type==="csv"&&Array.isArray(v)) v=v.join(", ");
-      // 카드 공통 문구(chrome.*)는 아직 편집 안 했으면 기본값을 미리 채워 보여준다.
-      if(v==null&&k.indexOf("chrome.")===0) v=CHROME_DEFAULTS[k.slice(7)];
-      el.value=(v==null?"":v);
-      if(pxable){
-        const wrap=document.createElement("div");wrap.className="fwrap";
-        wrap.appendChild(el);
-        const px=document.createElement("input");px.type="number";px.className="fpx";
-        px.dataset.fpx=k;px.min="10";px.max="240";px.placeholder="자동";
-        if(fpxData[k]!=null) px.value=fpxData[k];
-        wrap.appendChild(px);
-        f.appendChild(wrap);
-      }else{
-        f.appendChild(el);
-      }
-      sec.appendChild(f);
-    });
-    body.appendChild(sec);
-  });
+  curCardPages=sectionsToRender;
+  renderFieldPage(0); // 표지부터 한 장씩 시작
+
+  // 인스타(카톡) 본문 — 카드 이미지가 아니라 페이지 넘김과 무관하게 항상 아래에 보여준다.
+  const capWrap=$("#eCaption");capWrap.innerHTML="";
+  capWrap.appendChild(buildSectionNode(detail?"카톡 전달 본문":"인스타 본문",CAPTION_FIELDS,null,data));
 }
-function collectPatch(){
-  const patch={};
-  document.querySelectorAll("#eBody [data-k]").forEach(el=>{
+$("#fpPrev").onclick=()=>renderFieldPage(curFieldIdx-1);
+$("#fpNext").onclick=()=>renderFieldPage(curFieldIdx+1);
+
+// 편집 중인 값을 DOM 이 없어져도(카드 페이지 전환) 잃지 않도록 계속 누적해 둔다.
+// (오른쪽 패널은 한 번에 한 카드 필드만 DOM 에 존재하므로, 저장 시 DOM 을 훑는 대신
+//  타이핑·변경 즉시 이 객체에 반영해 둔다.)
+let pendingPatch={};
+function accumulateField(el){
+  if(el.matches("[data-k]")){
     const k=el.dataset.k,type=el.dataset.type;
     if(type==="csv"){
       const arr=el.value.split(/[,\n]/).map(s=>s.trim().replace(/^#/,"")).filter(Boolean).map(s=>"#"+s);
-      setPath(patch,k,arr);
-    }else setPath(patch,k,el.value);
-  });
-  const logoSel=document.querySelector('#eBody [data-style-logo]');
-  if(logoSel) patch.style=Object.assign(patch.style||{},{logo:logoSel.value});
-  const tsSel=document.querySelector('#eBody [data-style-ts]');
-  if(tsSel) patch.style=Object.assign(patch.style||{},{textScale:tsSel.value});
-  // 카드별 글자 크기(배율)
-  const ss={};
-  document.querySelectorAll('#eBody [data-slidescale]').forEach(el=>{ ss[el.dataset.slidescale]=el.value; });
-  if(Object.keys(ss).length) patch.style=Object.assign(patch.style||{},{slideScale:ss});
-  // 필드별 글자 크기(px)
-  const fp={};
-  document.querySelectorAll('#eBody [data-fpx]').forEach(el=>{ fp[el.dataset.fpx]=el.value; });
-  if(Object.keys(fp).length) patch.style=Object.assign(patch.style||{},{fontPx:fp});
-  // 카드 상하 위치
-  const al={};
-  document.querySelectorAll('#eBody [data-align]').forEach(el=>{ al[el.dataset.align]=el.value; });
-  if(Object.keys(al).length) patch.style=Object.assign(patch.style||{},{align:al});
-  const lwSel=document.querySelector('#eBody [data-lawyer]');
-  if(lwSel) patch.lawyer=lwSel.value;
+      setPath(pendingPatch,k,arr);
+    }else setPath(pendingPatch,k,el.value);
+  }else if(el.matches("[data-fpx]")){
+    pendingPatch.style=pendingPatch.style||{};
+    pendingPatch.style.fontPx=Object.assign({},pendingPatch.style.fontPx,{[el.dataset.fpx]:el.value});
+  }else if(el.matches("[data-slidescale]")){
+    pendingPatch.style=pendingPatch.style||{};
+    pendingPatch.style.slideScale=Object.assign({},pendingPatch.style.slideScale,{[el.dataset.slidescale]:el.value});
+  }else if(el.matches("[data-align]")){
+    pendingPatch.style=pendingPatch.style||{};
+    pendingPatch.style.align=Object.assign({},pendingPatch.style.align,{[el.dataset.align]:el.value});
+  }
+}
+function collectPatch(){
+  // 설정(디자인) 값은 항상 DOM 에 남아있으므로 최신값을 그대로 읽는다.
+  const logoSel=document.querySelector('#eSettings [data-style-logo]');
+  if(logoSel) pendingPatch.style=Object.assign(pendingPatch.style||{},{logo:logoSel.value});
+  const tsSel=document.querySelector('#eSettings [data-style-ts]');
+  if(tsSel) pendingPatch.style=Object.assign(pendingPatch.style||{},{textScale:tsSel.value});
+  const lwSel=document.querySelector('#eSettings [data-lawyer]');
+  if(lwSel) pendingPatch.lawyer=lwSel.value;
   // 카드별 이미지 빼기/넣기
-  if(Object.keys(curCardImg).length) patch.cardImg=curCardImg;
-  return patch;
+  if(Object.keys(curCardImg).length) pendingPatch.cardImg=Object.assign(pendingPatch.cardImg||{},curCardImg);
+  return pendingPatch;
 }
 // 검토 변호사를 바꾸면 저장 전에도 미리보기의 이름·실제 사진을 즉시 보여준다.
 // (변호사 사진은 등록된 4인 파일만 쓸 수 있어 서버에서 데이터URI 를 받아온다)
@@ -704,6 +776,8 @@ $("#cardImgFile").onchange=(e)=>{
 
 // 편집 미리보기(왼쪽 카드) — 실시간 HTML(iframe). 크기/위치 변경이 즉시 반영된다.
 let epIdx=0, epTotal=1, curPAGE={};
+// 카드 페이지 편집(오른쪽) 상태 — 한 번에 한 카드 필드만 DOM 에 둔다.
+let curCardPages=[], curFieldIdx=0, curEditData=null;
 const SLIDE_H=1350, SLIDE_W=1080;
 function epFrame(){ return $("#epFrame"); }
 function epDoc(){ try{ return epFrame().contentDocument; }catch(e){ return null; } }
@@ -714,34 +788,48 @@ function fitEp(){
   epFrame().style.transform="scale("+s+")";
   const sc=$("#epScaler"); sc.style.width=(SLIDE_W*s)+"px"; sc.style.height=(SLIDE_H*s)+"px";
 }
-// 선택 카드로 이동(iframe 내부 스크롤)
+// 선택 카드로 이동(iframe 내부 스크롤). 오른쪽 편집 패널도 같은 카드로 맞춘다.
 function showEp(i){
   epIdx=Math.max(0,Math.min(epTotal-1,i));
   const w=epFrame().contentWindow; if(w) w.scrollTo(0,epIdx*SLIDE_H);
   $("#epCounter").textContent=(epIdx+1)+" / "+epTotal;
+  syncFieldPageFromEp();
 }
 $("#epPrev").onclick=()=>showEp(epIdx-1);
 $("#epNext").onclick=()=>showEp(epIdx+1);
 
 // 편집값 → CSS(서버 styleOverrides 와 동일 규칙). 즉시 iframe 에 주입.
+// 카드별 배율·위치·px 는 지금 화면에 보이는 카드 페이지의 컨트롤만 DOM 에 있으므로,
+// DOM 을 훑는 대신 curEditData(이미 저장된 값) + pendingPatch(이번 세션 편집값)를
+// 합쳐서 쓴다. 이래야 다른 카드에서 바꾼 크기/위치가 카드 페이지를 넘겨도 유지된다.
+function effectiveStyle(){
+  const base=(curEditData&&curEditData.style)||{};
+  const p=pendingPatch.style||{};
+  return {
+    logo: p.logo!==undefined?p.logo:base.logo,
+    textScale: p.textScale!==undefined?p.textScale:base.textScale,
+    slideScale: Object.assign({},base.slideScale,p.slideScale),
+    align: Object.assign({},base.align,p.align),
+    fontPx: Object.assign({},base.fontPx,p.fontPx),
+  };
+}
 function liveCssText(){
   let css="";
-  const lg=document.querySelector('#eBody [data-style-logo]');
-  if(lg&&lg.value){const h=+lg.value;if(h>=30&&h<=160)css+='.top .logo{height:'+h+'px;max-width:'+(h*7)+'px}';}
-  const ts=document.querySelector('#eBody [data-style-ts]');
-  if(ts&&ts.value){const v=+ts.value;if(v>=0.8&&v<=1.4)css+=':root{--ts:'+v+'}';}
-  document.querySelectorAll('#eBody [data-slidescale]').forEach(el=>{
-    const dn=curPAGE[el.dataset.slidescale], v=+el.value;
+  const st=effectiveStyle();
+  if(st.logo){const h=+st.logo;if(h>=30&&h<=160)css+='.top .logo{height:'+h+'px;max-width:'+(h*7)+'px}';}
+  if(st.textScale){const v=+st.textScale;if(v>=0.8&&v<=1.4)css+=':root{--ts:'+v+'}';}
+  Object.entries(st.slideScale).forEach(([key,raw])=>{
+    const dn=curPAGE[key], v=+raw;
     if(dn&&v>=0.6&&v<=1.8)css+='.stage .slide[data-n="'+String(dn).padStart(2,"0")+'"]{--ts:'+v+'}';
   });
   const A={top:"flex-start",center:"center",bottom:"flex-end"};
-  document.querySelectorAll('#eBody [data-align]').forEach(el=>{
-    const dn=curPAGE[el.dataset.align], a=A[el.value];
+  Object.entries(st.align).forEach(([key,val])=>{
+    const dn=curPAGE[key], a=A[val];
     if(dn&&a)css+='.stage .slide[data-n="'+String(dn).padStart(2,"0")+'"] .body-area{justify-content:'+a+' !important}';
   });
-  document.querySelectorAll('#eBody [data-fpx]').forEach(el=>{
-    if(!el.value)return; const v=+el.value; if(!(v>=10&&v<=240))return;
-    const k=el.dataset.fpx.replace(/["\\]/g,"");
+  Object.entries(st.fontPx).forEach(([key,raw])=>{
+    if(!raw)return; const v=+raw; if(!(v>=10&&v<=240))return;
+    const k=String(key).replace(/["\\]/g,"");
     const sel=/_em$/.test(k)?'.stage [data-f="'+k.replace(/_em$/,"")+'"] em':'.stage [data-f="'+k+'"]';
     css+=sel+'{font-size:'+Math.round(v)+'px !important}';
   });
@@ -838,7 +926,7 @@ async function openEditor(){
   const r=await fetch("/api/draft-data?dir="+encodeURIComponent(curDir));
   const d=await r.json();
   if(!d.ok){ alert(d.error); return; }
-  epTotal=curTotal; epIdx=0; curCardImg={};
+  epTotal=curTotal; epIdx=0; curCardImg={}; pendingPatch={};
   buildEditorForm(d.data);
   epFrame().onload=onEpLoad;
   epFrame().src="/api/preview?dir="+encodeURIComponent(curDir)+"&v="+Date.now(); // 실시간 미리보기 로드
@@ -847,12 +935,16 @@ async function openEditor(){
 $("#vEdit").onclick=openEditor;
 // 편집값 변경 → 즉시 미리보기 반영(크기·위치·로고·글자 내용 모두 타이핑 즉시 반영).
 $("#eBody").addEventListener("input",(e)=>{
+  // 카드 페이지를 넘기면 지금 안 보이는 카드의 입력칸은 DOM 에서 사라지므로,
+  // 저장 시 잃지 않도록 값이 바뀔 때마다 즉시 누적해 둔다.
+  accumulateField(e.target);
   // px 타자 등 연속 입력 → 디바운스. 무거운 '현재 크기' 재측정은 여기서 하지 않는다.
   if(e.target.matches('[data-fpx],[data-slidescale],[data-align],[data-style-logo],[data-style-ts]')) applyLiveDebounced();
   // 헤드라인·설명 등 글자 내용은 가벼운 단일 요소 갱신이라 디바운스 없이 즉시 반영.
   if(e.target.matches('[data-k]')) liveTextSync(e.target.dataset.k);
 });
 $("#eBody").addEventListener("change",(e)=>{
+  accumulateField(e.target);
   // 배율/전체글자/로고(선택형) 변경 → 즉시 반영 + 기준 크기가 바뀌므로 placeholder 갱신.
   if(e.target.matches('[data-slidescale],[data-align],[data-style-logo],[data-style-ts]')){ applyLive(); fillPxPlaceholdersDebounced(); }
 });
@@ -870,7 +962,13 @@ $("#eSave").onclick=async()=>{
     $("#vCaption").textContent=d.caption||"";
     setBadge("pending");
     epTotal=(d.cards&&d.cards.length)||epTotal;
-    curCardImg={};                          // 이미지 변경 반영 완료
+    curCardImg={};pendingPatch={};          // 이번 세션 편집값 반영 완료(다음 저장을 위해 비움)
+    // 최신 저장값으로 편집 데이터를 새로고침(보고 있던 카드 페이지는 그대로 유지)
+    try{
+      const r2=await fetch("/api/draft-data?dir="+encodeURIComponent(curDir));
+      const d2=await safeJson(r2);
+      if(d2.ok){ const keepIdx=curFieldIdx; buildEditorForm(d2.data); renderFieldPage(keepIdx); }
+    }catch(e){ /* 새로고침 실패해도 저장 자체는 이미 됐으므로 무시 */ }
     epFrame().onload=onEpLoad;              // 저장본(글 내용·이미지 포함)으로 미리보기 리로드
     epFrame().src="/api/preview?dir="+encodeURIComponent(curDir)+"&v="+Date.now();
     // 저장 후에도 편집창은 열어둔다(연속 미세조정 편하게)
