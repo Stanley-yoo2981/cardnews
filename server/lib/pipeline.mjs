@@ -171,17 +171,41 @@ export function applyEditablePatch(data, patch) {
     if (!p || typeof p !== "object") continue;
     data[s] = data[s] || {};
     for (const f of EDIT_SLIDE_TEXT) if (f in p) data[s][f] = str(p[f]);
-    if (Array.isArray(p.stats))
-      data[s].stats = p.stats
-        .map((x) => ({ label: str(x && x.label), value: str(x && x.value) }))
-        .filter((x) => x.label || x.value)
-        .slice(0, 3);
-    if (Array.isArray(p.cards))
-      data[s].cards = p.cards
-        .map((x) => ({ title: str(x && x.title), desc: str(x && x.desc) }))
-        .filter((x) => x.title || x.desc)
-        .slice(0, 3);
-    if (Array.isArray(p.checks)) data[s].checks = p.checks.map(str).filter(Boolean).slice(0, 4);
+    // stats/cards/checks: 편집기가 카드 한 장씩만 보여주므로, patch 에는 "이번에 건드린
+    // 항목만" 담겨 있을 수 있다(안 건드린 항목은 배열에 아예 없음=구멍). 통째로 교체하면
+    // 안 건드린 결과·자료·체크 항목이 사라지므로, 기존 값 위에 patch 로 온 항목만
+    // 인덱스별로 덮어쓴다(forEach 는 성긴 배열의 구멍을 자동으로 건너뛴다).
+    if (Array.isArray(p.stats)) {
+      const merged = (Array.isArray(data[s].stats) ? data[s].stats : []).map((x) => ({
+        label: str(x && x.label),
+        value: str(x && x.value),
+      }));
+      p.stats.forEach((x, i) => {
+        if (!x || typeof x !== "object") return;
+        merged[i] = merged[i] || { label: "", value: "" };
+        if ("label" in x) merged[i].label = str(x.label);
+        if ("value" in x) merged[i].value = str(x.value);
+      });
+      data[s].stats = merged.filter((x) => x.label || x.value).slice(0, 3);
+    }
+    if (Array.isArray(p.cards)) {
+      const merged = (Array.isArray(data[s].cards) ? data[s].cards : []).map((x) => ({
+        title: str(x && x.title),
+        desc: str(x && x.desc),
+      }));
+      p.cards.forEach((x, i) => {
+        if (!x || typeof x !== "object") return;
+        merged[i] = merged[i] || { title: "", desc: "" };
+        if ("title" in x) merged[i].title = str(x.title);
+        if ("desc" in x) merged[i].desc = str(x.desc);
+      });
+      data[s].cards = merged.filter((x) => x.title || x.desc).slice(0, 3);
+    }
+    if (Array.isArray(p.checks)) {
+      const merged = (Array.isArray(data[s].checks) ? data[s].checks : []).slice();
+      p.checks.forEach((v, i) => { merged[i] = str(v); });
+      data[s].checks = merged.filter(Boolean).slice(0, 4);
+    }
   }
 
   // 상세 버전: 표지 부제(cover_sub)는 위 EDIT_TEXT 에서 처리됨. 본문 카드(sections) 편집.
